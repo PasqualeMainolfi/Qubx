@@ -75,7 +75,7 @@ impl MasterStreamoutProcess {
         let p = pa::PortAudio::new().unwrap();
         
         let device = match params_clone.outdevice {
-            Some(devout) => devout,
+            Some(devout) => pa::DeviceIndex(devout),
             None => { p.default_output_device().unwrap() }
         };
 
@@ -198,14 +198,14 @@ impl DuplexProcess {
         let p = pa::PortAudio::new().unwrap();
         
         let indevice = match params_clone.indevice {
-            Some(dev) => dev,
+            Some(dev) => pa::DeviceIndex(dev),
             None => { p.default_input_device().unwrap() }
         };
         
         let inchannels = params_clone.inchannels;
         
         let outdevice = match params_clone.outdevice {
-            Some(dev) => dev,
+            Some(dev) => pa::DeviceIndex(dev),
             None => { p.default_output_device().unwrap() }
         };
         

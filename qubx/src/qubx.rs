@@ -53,6 +53,18 @@ impl Qubx {
 
     }
 
+    /// # Get devices index and info
+    /// 
+    /// 
+    pub fn get_devices_info() {
+        let port_audio = pa::PortAudio::new().unwrap();
+        let devices = port_audio.devices().unwrap();
+        for device in devices {
+            let d = &device.unwrap();
+            print!("\n[{:?}]: {:?}\n", d.0.0, d.1);
+        }
+    }
+
     /// Create master streamout
     /// 
     /// # Args

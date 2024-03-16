@@ -2,7 +2,6 @@
 
 use std::thread::JoinHandle;
 use std::default::Default;
-use portaudio as pa;
 
 pub enum QubxExceptions {
     ParamsError,
@@ -40,9 +39,9 @@ pub struct StreamParameters {
     pub chunk: u32,
     pub sr: i32,
     pub outchannels: u32,
-    pub outdevice: Option<pa::DeviceIndex>,
+    pub outdevice: Option<u32>,
     pub inchannels: u32,
-    pub indevice: Option<pa::DeviceIndex>,
+    pub indevice: Option<u32>,
 }
 
 impl Default for StreamParameters {

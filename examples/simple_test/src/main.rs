@@ -29,8 +29,8 @@ const CHANNELS: u32 = 1;
 const CHUNK: u32 = 4096;
 
 const FILES: [&str; 2] = [
-    "../../../audio_files_for_test/vox.wav", 
-    "../../../audio_files_for_test/suzanne_mono.wav"
+    "./../audio_files_for_test/vox.wav", 
+    "./../audio_files_for_test/suzanne_mono.wav"
 ];
 
 enum TestMode {
@@ -40,7 +40,7 @@ enum TestMode {
 
 fn main() {
 
-    let mode = TestMode::Input;
+    let mode = TestMode::Output;
     
     let mut run = true;
     
