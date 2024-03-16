@@ -6,6 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-qubx = { path = "/Users/pm/AcaHub/Coding/QUBX/rust_implementation/qubx" }
+qubx = { path = "/Users/pm/AcaHub/Coding/QubxRust/qubx" }
 rand = "0.8.5"
 wav_io = "0.1.14"
