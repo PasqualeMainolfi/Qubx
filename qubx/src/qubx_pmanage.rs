@@ -1,10 +1,6 @@
-
-use crate::qubx_components::{ MonitorProcess, MasterStreamoutProcess, DuplexProcess, DspProcess };
-use crate::qubx_common::{ Process, ProcessState };
-use std::sync::{ Arc, Mutex };
-
-
-
+use crate::qubx_common::{Process, ProcessState};
+use crate::qubx_components::{DspProcess, DuplexProcess, MasterStreamoutProcess, MonitorProcess};
+use std::sync::{Arc, Mutex};
 
 pub struct QubxMasterProcess {
     processes_monitor: Arc<Mutex<MonitorProcess>>,
@@ -12,14 +8,19 @@ pub struct QubxMasterProcess {
 }
 
 impl QubxMasterProcess {
-
-    pub fn new(processes_monitor: Arc<Mutex<MonitorProcess>>, process: Arc<Mutex<MasterStreamoutProcess>>) -> Self {
-        Self { processes_monitor, process }
+    pub fn new(
+        processes_monitor: Arc<Mutex<MonitorProcess>>,
+        process: Arc<Mutex<MasterStreamoutProcess>>,
+    ) -> Self {
+        Self {
+            processes_monitor,
+            process,
+        }
     }
-    
-    pub fn start<F>(&self, dsp_master_function: F) 
+
+    pub fn start<F>(&self, dsp_master_function: F)
     where
-        F: for<'a> FnMut(&'a mut [f32]) + Send + Sync + 'static
+        F: for<'a> FnMut(&'a mut [f32]) + Send + Sync + 'static,
     {
         let pclone = Arc::clone(&self.process);
         let p = pclone.lock().unwrap();
@@ -31,26 +32,28 @@ impl QubxMasterProcess {
 
         drop(p);
         drop(pm);
-
     }
-
 }
-
 
 pub struct QubxDuplexProcess {
     processes_monitor: Arc<Mutex<MonitorProcess>>,
-    process: Arc<Mutex<DuplexProcess>>
+    process: Arc<Mutex<DuplexProcess>>,
 }
 
 impl QubxDuplexProcess {
-
-    pub fn new(processes_monitor: Arc<Mutex<MonitorProcess>>, process: Arc<Mutex<DuplexProcess>>) -> Self {
-        Self { processes_monitor, process }
+    pub fn new(
+        processes_monitor: Arc<Mutex<MonitorProcess>>,
+        process: Arc<Mutex<DuplexProcess>>,
+    ) -> Self {
+        Self {
+            processes_monitor,
+            process,
+        }
     }
-    
-    pub fn start<F>(&self, dsp_function: F) 
-    where 
-        F: for<'a> FnMut(&'a [f32]) -> Vec<f32> + Send + Sync + 'static
+
+    pub fn start<F>(&self, dsp_function: F)
+    where
+        F: for<'a> FnMut(&'a [f32]) -> Vec<f32> + Send + Sync + 'static,
     {
         let pclone = Arc::clone(&self.process);
         let p = pclone.lock().unwrap();
@@ -58,28 +61,35 @@ impl QubxDuplexProcess {
         let t = p.start(dsp_function);
         let pmonitor = Arc::clone(&self.processes_monitor);
         let mut pm = pmonitor.lock().unwrap();
-        pm.add_process(Process::new(t, String::from("DUPLEX STREAM OUT"), ProcessState::On));
+        pm.add_process(Process::new(
+            t,
+            String::from("DUPLEX STREAM OUT"),
+            ProcessState::On,
+        ));
 
         drop(p);
         drop(pm);
-
     }
-
 }
 pub struct QubxDspProcess {
     processes_monitor: Arc<Mutex<MonitorProcess>>,
-    process: Arc<Mutex<DspProcess>>
+    process: Arc<Mutex<DspProcess>>,
 }
 
 impl QubxDspProcess {
-
-    pub fn new(processes_monitor: Arc<Mutex<MonitorProcess>>, process: Arc<Mutex<DspProcess>>) -> Self {
-        Self { processes_monitor, process }
+    pub fn new(
+        processes_monitor: Arc<Mutex<MonitorProcess>>,
+        process: Arc<Mutex<DspProcess>>,
+    ) -> Self {
+        Self {
+            processes_monitor,
+            process,
+        }
     }
-    
-    pub fn start<F>(&self, audio_data: Vec<f32>, dsp_function: F) 
+
+    pub fn start<F>(&self, audio_data: Vec<f32>, dsp_function: F)
     where
-        F: for<'a> FnMut(&'a mut [f32]) + Send + Sync + 'static
+        F: for<'a> FnMut(&'a mut [f32]) + Send + Sync + 'static,
     {
         let pclone = Arc::clone(&self.process);
         let p = pclone.lock().unwrap();
@@ -91,5 +101,4 @@ impl QubxDspProcess {
         drop(p);
         drop(pm);
     }
-
 }
