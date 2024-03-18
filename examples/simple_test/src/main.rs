@@ -38,7 +38,7 @@ enum TestMode {
 }
 
 fn main() {
-    let mode = TestMode::Input;
+    let mode = TestMode::Output;
 
     let mut run = true;
 
