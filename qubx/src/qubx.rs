@@ -1,10 +1,10 @@
-// #![allow(
-//     dead_code,
-//     unused_mut,
-//     unused_variables,
-//     unused_import_braces,
-//     unused_imports
-// )]
+#![allow(
+    dead_code,
+    unused_mut,
+    unused_variables,
+    unused_import_braces,
+    unused_imports
+)]
 
 use crate::qubx_common::{Process, ProcessState, StreamParameters};
 use crate::qubx_components::{DspProcess, DuplexProcess, MasterStreamoutProcess, MonitorProcess};
@@ -186,11 +186,11 @@ impl Qubx {
             let count = self.count_dsp_iterations.lock().unwrap();
             let lat_amount = self.dsp_latency_amount.lock().unwrap();
             let fac = if *count > 0.0 { *count } else { 1.0 };
-            let lat_amount = lat_amount.as_secs_f32() / &fac;
+            let lat_amount = lat_amount.as_secs_f32() / fac;
             print!(
                 "\n[PROCESSES INFO]\n:::Process Name: \"DSP\"\n:::Number of started processes: {}\n:::Latency average: {:?}\n\n",
                 *count as i32,
-                std::time::Duration::from_secs_f32(lat_amount as f32),
+                std::time::Duration::from_secs_f32(lat_amount),
             );
         }
 

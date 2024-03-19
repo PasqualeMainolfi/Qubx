@@ -159,7 +159,7 @@ impl MasterStreamoutProcess {
                 let lat_amount_sec = latency_amount.lock().unwrap();
                 let count = count_latency_thread.lock().unwrap();
                 let fac = if *count > 0.0 { *count } else { 1.0 };
-                let lat_amount = lat_amount_sec.as_secs_f32() / &fac;
+                let lat_amount = lat_amount_sec.as_secs_f32() / fac;
                 print!(
                     "\n[PROCESSES INFO]\n:::Process Name: Master streamout {}\n:::Process Id: {:?}\n:::Output device latency: {:?}\n:::Number of iterations: {}\n:::Latency average: {:?}\n\n",
                     name2,
@@ -318,7 +318,7 @@ impl DuplexProcess {
                 let lat_amount_sec = latency_amount.lock().unwrap();
                 let count = count_latency_thread.lock().unwrap();
                 let fac = if *count > 0.0 { *count } else { 1.0 };
-                let lat_amount = lat_amount_sec.as_secs_f32() / &fac;
+                let lat_amount = lat_amount_sec.as_secs_f32() / fac;
                 print!(
                     "\n[PROCESSES INFO]\n:::Process Name: Duplex Stream\n:::Process Id: {:?}\n:::Input device latency: {:?}\n:::Output device latency: {:?}\n:::Number of iterations: {}\n:::Latency average: {:?}\n\n",
                     thread::current().id(),
