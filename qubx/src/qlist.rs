@@ -6,13 +6,17 @@ use concurrent_queue::ConcurrentQueue;
 pub struct QList {
     pub qlist: Vec<ConcurrentQueue<Vec<f32>>>,
     pub length: u16,
-    index: usize
+    index: usize,
 }
 
 impl QList {
     pub fn new() -> Self {
         let q: Vec<ConcurrentQueue<Vec<f32>>> = Vec::new();
-        Self { qlist: q, length: 0, index: 0 }
+        Self {
+            qlist: q,
+            length: 0,
+            index: 0,
+        }
     }
 
     pub fn initialize(&mut self) {
@@ -38,7 +42,7 @@ impl QList {
             if self.is_empty_at_index(self.index) {
                 break;
             }
-            
+
             self.index += 1;
             self.index %= self.length as usize;
             counter += 1;
@@ -55,20 +59,21 @@ impl QList {
     pub fn is_all_empty(&self) -> bool {
         self.qlist.iter().all(|x| x.is_empty())
     }
-
 }
 
 impl Default for QList {
     fn default() -> Self {
         let qlist: Vec<ConcurrentQueue<Vec<f32>>> = vec![ConcurrentQueue::<Vec<f32>>::unbounded()];
-        Self { qlist, length: 1, index: 0 }
+        Self {
+            qlist,
+            length: 1,
+            index: 0,
+        }
     }
 }
 
-
 impl Clone for QList {
     fn clone(&self) -> Self {
-
         let mut qclone: Vec<ConcurrentQueue<Vec<f32>>> = Vec::new();
 
         for q in &self.qlist {
@@ -79,10 +84,13 @@ impl Clone for QList {
             qclone.push(cloned_queue);
         }
 
-        Self { qlist: qclone, length: self.length, index: self.index }
+        Self {
+            qlist: qclone,
+            length: self.length,
+            index: self.index,
+        }
     }
 }
 
 unsafe impl Send for QList {}
 unsafe impl Sync for QList {}
-

@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 concurrent-queue = "2.4.0"
+crossbeam = "0.8.4"
 portaudio = "0.7.0"
 rand = "0.8.5"
 wav_io = "0.1.14"

@@ -125,14 +125,13 @@ impl MasterStreamoutProcess {
                 let elapsed_time = start_time.elapsed();
                 if verb1.load(Ordering::Acquire) {
                     println!("[PROCESS INFO] Thread:::[Name: MASTER OUTPUT {}]:::[ID: {:?}]:::[READ FROM QUEUES, PROCESS AND OUTPUT LATENCY: {:?}]", name1, thread::current().id(), elapsed_time);
+                    let mut lat_amount = latency_amount_clone.lock().unwrap();
+                    *lat_amount += elapsed_time;
+                    drop(lat_amount);
+                    let mut count = count_clone.lock().unwrap();
+                    *count += 1.0;
+                    drop(count);
                 }
-
-                let mut lat_amount = latency_amount_clone.lock().unwrap();
-                *lat_amount += elapsed_time;
-                drop(lat_amount);
-                let mut count = count_clone.lock().unwrap();
-                *count += 1.0;
-                drop(count);
 
                 pa::Continue
             };
@@ -277,15 +276,15 @@ impl DuplexProcess {
                 let end_time = start_time.elapsed();
 
                 if verb1.load(Ordering::Acquire) {
-                    println!("[PROCESS INFO] Thread:::[Name: \"DUPLEX STREAM\"]:::[ID: {:?}]:::[READ, PROCESS AND OUTPUT LATENCY: {:?}]", thread::current().id(), end_time)
+                    println!("[PROCESS INFO] Thread:::[Name: \"DUPLEX STREAM\"]:::[ID: {:?}]:::[READ, PROCESS AND OUTPUT LATENCY: {:?}]", thread::current().id(), end_time);
+                    let mut lat_amount = latency_amount_clone.lock().unwrap();
+                    *lat_amount += end_time;
+                    drop(lat_amount);
+                    let mut count = count_clone.lock().unwrap();
+                    *count += 1.0;
+                    drop(count);
                 }
 
-                let mut lat_amount = latency_amount_clone.lock().unwrap();
-                *lat_amount += end_time;
-                drop(lat_amount);
-                let mut count = count_clone.lock().unwrap();
-                *count += 1.0;
-                drop(count);
 
                 pa::Continue
             };
@@ -443,18 +442,17 @@ impl DspProcess {
             drop(m);
 
             let end = start.elapsed();
-
-            let mut lat_amount = dsp_lat_amount_clone.lock().unwrap();
-            *lat_amount += end;
-            drop(lat_amount);
-
-            let mut count = count_iter.lock().unwrap();
-            *count += 1.0;
-            drop(count);
-
             let id = thread::current().id();
 
             if verbose.load(Ordering::Acquire) {
+                let mut lat_amount = dsp_lat_amount_clone.lock().unwrap();
+                *lat_amount += end;
+                drop(lat_amount);
+
+                let mut count = count_iter.lock().unwrap();
+                *count += 1.0;
+                drop(count);
+
                 println!(
                     "[PROCESS INFO] Thread:::[Name: \"DSP\" >>> Master streamout {}]:::[ID: {:?}]:::[PROCESS AND WRITE TO QUEUE LATENCY: {:?}]",
                     ms_name,
