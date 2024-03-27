@@ -2,6 +2,7 @@
 
 use crate::qlist::QList;
 use crate::qubx_common::{Process, ProcessState, StreamParameters};
+use pa::PortAudio;
 use portaudio as pa;
 
 use std::collections::HashMap;
@@ -71,7 +72,7 @@ impl MasterStreamoutProcess {
         let params_clone = Arc::clone(&self.params);
         let sr = params_clone.sr as f64;
 
-        let p = pa::PortAudio::new().unwrap();
+        let p = PortAudio::new().unwrap();
 
         let device = match params_clone.outdevice {
             Some(devout) => pa::DeviceIndex(devout),
@@ -135,8 +136,6 @@ impl MasterStreamoutProcess {
 
                 pa::Continue
             };
-
-            let p = pa::PortAudio::new().unwrap();
 
             let device_info = p.device_info(device).unwrap();
             let latency = device_info.default_low_output_latency;
