@@ -63,7 +63,7 @@ impl Qubx {
         let devices = port_audio.devices().unwrap();
         for device in devices {
             let d = &device.unwrap();
-            print!("\n[{:?}]: {:?}\n", d.0 .0, d.1);
+            print!("\n[{:?}]: {:?}\n", d.0, d.1);
         }
     }
 
