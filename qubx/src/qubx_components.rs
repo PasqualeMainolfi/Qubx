@@ -9,6 +9,8 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle, ThreadId};
+use threadpool::ThreadPool;
+use std::sync::mpsc::channel;
 
 /// # Master Stream-out
 ///
@@ -388,7 +390,7 @@ impl DspProcess {
     ///
     /// `JoinHandle<()>`
     ///
-    pub fn start<F>(&self, audio_data: Vec<f32>, mut dsp_function: F) -> JoinHandle<()>
+    pub fn start<F>(&self, audio_data: Vec<f32>, dsp_function: F) -> JoinHandle<()>
     where
         F: for<'a> FnMut(&'a mut [f32]) + Send + Sync + 'static,
     {
@@ -412,28 +414,53 @@ impl DspProcess {
             for i in (0..audio_data.len()).step_by(chunk_size) {
                 let start = i;
                 let end = std::cmp::min(i + chunk_size, audio_data.len());
-
                 let mut frame_padded = vec![0.0; chunk_size];
                 let size = end - start;
-
                 frame_padded[0..size].copy_from_slice(&audio_data[start..end]);
-
-                // APPLY DSP TO SINGLE AUDIO STREAM OR PASS DSP FUNCTION
-                // .
-
-                dsp_function(&mut frame_padded);
-
-                // .
-
                 frames.push(frame_padded);
             }
+
+            let num_core = 4;
+            let pool = ThreadPool::new(num_core);
+
+            let frames_ptr = Arc::new(Mutex::new(frames));
+            let dsp_ptr = Arc::new(Mutex::new(dsp_function));
+
+            let (sender, receiver) = channel();
+
+            for i in 0..frames_ptr.lock().unwrap().len() {
+            	let frames_ptr_clone = Arc::clone(&frames_ptr);
+             	let dsp_ptr_clone = Arc::clone(&dsp_ptr);
+              	let sender_clone = sender.clone();
+
+	            pool.execute(move || {
+	            	let mut fptr = frames_ptr_clone.lock().unwrap();
+					if let Some(fp) = fptr.get_mut(i) {
+						let mut dsp = dsp_ptr_clone.lock().unwrap();
+						dsp(fp);
+						drop(fptr);
+					}
+					sender_clone.send(()).unwrap();
+	            });
+            }
+
+            drop(sender);
+
+            for _ in 0..frames_ptr.lock().unwrap().len() {
+            	receiver.recv().unwrap();
+            }
+
+            let frames_ptr_to_queue = Arc::clone(&frames_ptr);
+            let fq = frames_ptr_to_queue.lock().unwrap();
 
             let m = mclone.lock().unwrap();
             let qclone = Arc::clone(&m.qlist);
             let mut q = qclone.lock().unwrap();
-            for frame in frames.iter() {
+            for frame in fq.iter() {
                 q.put_frame(frame.clone());
             }
+
+            drop(fq);
 
             q.get_next_empty_queue();
 
