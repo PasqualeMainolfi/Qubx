@@ -85,7 +85,7 @@ fn main() {
 
             let mut count = 0;
             loop {
-                let random_size = rng.gen_range(44100..(44100 * 3));
+                let random_size = rng.gen_range(44100..(44100 * 10));
                 let n: usize = random_size as usize;
                 // let index_audio_array = rng.gen_range(0..2);
                 let sig_size1 = audio_sigs[0].len();
