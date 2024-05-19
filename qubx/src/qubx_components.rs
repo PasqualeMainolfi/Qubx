@@ -9,9 +9,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle, ThreadId};
-use threadpool::ThreadPool;
-use std::sync::mpsc;
-// use num_cpus;
+use rayon::prelude::*;
 
 /// # Master Stream-out
 ///
@@ -400,6 +398,7 @@ impl DspProcess {
         let verbose = Arc::clone(&self.verbose);
         let dsp_lat_amount_clone = Arc::clone(&self.dsp_latency_amount);
         let count_iter = Arc::clone(&self.count_dsp_iterations);
+        let dsp_ptr = Arc::new(Mutex::new(dsp_function));
 
         let audio_size = audio_data.len();
 
@@ -412,58 +411,38 @@ impl DspProcess {
 
             drop(m);
 
-            let mut frames: Vec<Vec<f32>> = Vec::new();
+            // let mut frames: Vec<Vec<f32>> = Vec::new();
 
-            for i in (0..audio_data.len()).step_by(chunk_size) {
-                let start = i;
-                let end = std::cmp::min(i + chunk_size, audio_data.len());
-                let mut frame_padded = vec![0.0; chunk_size];
-                let size = end - start;
-                frame_padded[0..size].copy_from_slice(&audio_data[start..end]);
-                frames.push(frame_padded);
-            }
+            let mut frames: Vec<Vec<f32>> = audio_data.chunks(chunk_size)
+                .map(|chunk| {
+                	let mut frame_padded = vec![0.0; chunk_size];
+                 	frame_padded[0..chunk.len()].copy_from_slice(chunk);
+                  	frame_padded
+                })
+                .collect();
 
-            let frames_size = frames.len();
+            // for i in (0..audio_data.len()).step_by(chunk_size) {
+            //     let start = i;
+            //     let end = std::cmp::min(i + chunk_size, audio_data.len());
+            //     let mut frame_padded = vec![0.0; chunk_size];
+            //     let size = end - start;
+            //     frame_padded[0..size].copy_from_slice(&audio_data[start..end]);
+            //     frames.push(frame_padded);
+            // }
 
-            let num_core = 4;
-            let pool = ThreadPool::new(num_core);
-            let (sender, receiver) = mpsc::channel();
+            // let frames_size = frames.len();
 
-            let frames_ptr = Arc::new(Mutex::new(frames));
-            let dsp_ptr = Arc::new(Mutex::new(dsp_function));
-
-            for i in 0..frames_size {
-            	let frames_ptr_clone = Arc::clone(&frames_ptr);
-             	let dsp_ptr_clone = Arc::clone(&dsp_ptr);
-              	let sender_clone = sender.clone();
-
-	            pool.execute(move || {
-	            	let mut fptr = frames_ptr_clone.lock().unwrap();
-					if let Some(fp) = fptr.get_mut(i) {
-						let mut dsp = dsp_ptr_clone.lock().unwrap();
-						dsp(fp);
-					}
-					sender_clone.send(()).unwrap();
-	            });
-            }
-
-			drop(sender);
-
-            for _ in 0..frames_size {
-            	receiver.recv().unwrap();
-            }
-
-            let frames_ptr_to_queue = Arc::clone(&frames_ptr);
-            let fq = frames_ptr_to_queue.lock().unwrap();
+            frames.par_iter_mut().for_each(|frame| {
+            	let mut dsp = dsp_ptr.lock().unwrap();
+            	dsp(frame)
+            });
 
             let m = mclone.lock().unwrap();
             let qclone = Arc::clone(&m.qlist);
             let mut q = qclone.lock().unwrap();
-            for f in fq.iter() {
+            for f in frames.iter() {
             	q.put_frame(f.clone());
             }
-
-            drop(fq);
 
             q.get_next_empty_queue();
 
