@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle, ThreadId};
 use threadpool::ThreadPool;
 use std::sync::mpsc;
+use num_cpus;
 
 /// # Master Stream-out
 ///
@@ -422,7 +423,7 @@ impl DspProcess {
 
             let frames_size = frames.len();
 
-            let num_core = 4;
+            let num_core = num_cpus::get() / 2;
             let pool = ThreadPool::new(num_core);
 
             let frames_ptr = Arc::new(Mutex::new(frames));
@@ -440,10 +441,8 @@ impl DspProcess {
 					if let Some(fp) = fptr.get_mut(i) {
 						let mut dsp = dsp_ptr_clone.lock().unwrap();
 						dsp(fp);
-						drop(dsp);
 					}
 					sender_clone.send(()).unwrap();
-					drop(fptr);
 	            });
             }
 

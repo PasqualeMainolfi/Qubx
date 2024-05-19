@@ -114,6 +114,7 @@ name = "qubx"
 version = "0.1.0"
 dependencies = [
  "concurrent-queue",
+ "num_cpus",
  "portaudio",
  "threadpool",
 ]
