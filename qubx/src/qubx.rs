@@ -153,8 +153,7 @@ impl Qubx {
                 let mut m = monitor_clone.lock().unwrap();
                 m.remove_inactive_processes();
                 drop(m);
-
-                thread::sleep(std::time::Duration::from_secs(1));
+                // thread::sleep(std::time::Duration::from_secs(1));
             }
         });
 

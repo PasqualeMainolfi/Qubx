@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle, ThreadId};
 use threadpool::ThreadPool;
-use std::sync::mpsc::channel;
+use std::sync::mpsc;
 
 /// # Master Stream-out
 ///
@@ -420,15 +420,17 @@ impl DspProcess {
                 frames.push(frame_padded);
             }
 
+            let frames_size = frames.len();
+
             let num_core = 4;
             let pool = ThreadPool::new(num_core);
 
             let frames_ptr = Arc::new(Mutex::new(frames));
             let dsp_ptr = Arc::new(Mutex::new(dsp_function));
 
-            let (sender, receiver) = channel();
+            let (sender, receiver) = mpsc::channel();
 
-            for i in 0..frames_ptr.lock().unwrap().len() {
+            for i in 0..frames_size {
             	let frames_ptr_clone = Arc::clone(&frames_ptr);
              	let dsp_ptr_clone = Arc::clone(&dsp_ptr);
               	let sender_clone = sender.clone();
@@ -438,15 +440,16 @@ impl DspProcess {
 					if let Some(fp) = fptr.get_mut(i) {
 						let mut dsp = dsp_ptr_clone.lock().unwrap();
 						dsp(fp);
-						drop(fptr);
+						drop(dsp);
 					}
 					sender_clone.send(()).unwrap();
+					drop(fptr);
 	            });
             }
 
-            drop(sender);
+			drop(sender);
 
-            for _ in 0..frames_ptr.lock().unwrap().len() {
+            for _ in 0..frames_size {
             	receiver.recv().unwrap();
             }
 
