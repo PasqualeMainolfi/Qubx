@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle, ThreadId};
 use threadpool::ThreadPool;
 use std::sync::mpsc;
-use num_cpus;
+// use num_cpus;
 
 /// # Master Stream-out
 ///
@@ -401,6 +401,8 @@ impl DspProcess {
         let dsp_lat_amount_clone = Arc::clone(&self.dsp_latency_amount);
         let count_iter = Arc::clone(&self.count_dsp_iterations);
 
+        let audio_size = audio_data.len();
+
         thread::spawn(move || {
             let start = std::time::Instant::now();
 
@@ -423,13 +425,12 @@ impl DspProcess {
 
             let frames_size = frames.len();
 
-            let num_core = num_cpus::get() / 2;
+            let num_core = 4;
             let pool = ThreadPool::new(num_core);
+            let (sender, receiver) = mpsc::channel();
 
             let frames_ptr = Arc::new(Mutex::new(frames));
             let dsp_ptr = Arc::new(Mutex::new(dsp_function));
-
-            let (sender, receiver) = mpsc::channel();
 
             for i in 0..frames_size {
             	let frames_ptr_clone = Arc::clone(&frames_ptr);
@@ -458,8 +459,8 @@ impl DspProcess {
             let m = mclone.lock().unwrap();
             let qclone = Arc::clone(&m.qlist);
             let mut q = qclone.lock().unwrap();
-            for frame in fq.iter() {
-                q.put_frame(frame.clone());
+            for f in fq.iter() {
+            	q.put_frame(f.clone());
             }
 
             drop(fq);
