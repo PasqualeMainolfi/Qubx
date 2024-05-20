@@ -73,8 +73,8 @@ fn main() {
                 }
             });
 
-            let mut dsp_process1 = q.create_parallel_dsp_process(String::from("M1"));
-            let mut dsp_process2 = q.create_parallel_dsp_process(String::from("M1"));
+            let mut dsp_process1 = q.create_parallel_dsp_process(String::from("M1"), false);
+            let mut dsp_process2 = q.create_parallel_dsp_process(String::from("M1"), false);
 
             let audio1 = open_file(FILES[0]);
             let audio2 = open_file(FILES[1]);
@@ -114,13 +114,13 @@ fn main() {
                     *sample2 *= envelope[i];
                 }
 
-                dsp_process1.start(audio_data1, move |frame| {
-                    for sample in frame.iter_mut() {
+                dsp_process1.start(audio_data1, move |audio_data| {
+                    for sample in audio_data.iter_mut() {
                         *sample *= 0.7;
                     }
                 });
 
-                dsp_process2.start(audio_data2, move |_frame| {});
+                dsp_process2.start(audio_data2, move |_audio_data| {});
 
                 if count >= 5 {
                     run = false

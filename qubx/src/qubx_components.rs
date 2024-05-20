@@ -420,7 +420,7 @@ impl DspProcess {
              	.map(|chunk| {
               		let mut frame_padded = vec![0.0; chunk_size];
                 	frame_padded[0..chunk.len()].copy_from_slice(chunk);
-                 	if *use_par_ptr {
+                 	if !*use_par_ptr {
                   		let mut dsp = dsp_ptr.lock().unwrap();
                   		dsp(&mut frame_padded)
                   	}
