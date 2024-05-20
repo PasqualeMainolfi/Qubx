@@ -411,26 +411,14 @@ impl DspProcess {
 
             drop(m);
 
-            // let mut frames: Vec<Vec<f32>> = Vec::new();
-
-            let mut frames: Vec<Vec<f32>> = audio_data.chunks(chunk_size)
-                .map(|chunk| {
-                	let mut frame_padded = vec![0.0; chunk_size];
-                 	frame_padded[0..chunk.len()].copy_from_slice(chunk);
-                  	frame_padded
-                })
-                .collect();
-
-            // for i in (0..audio_data.len()).step_by(chunk_size) {
-            //     let start = i;
-            //     let end = std::cmp::min(i + chunk_size, audio_data.len());
-            //     let mut frame_padded = vec![0.0; chunk_size];
-            //     let size = end - start;
-            //     frame_padded[0..size].copy_from_slice(&audio_data[start..end]);
-            //     frames.push(frame_padded);
-            // }
-
-            // let frames_size = frames.len();
+            let mut frames: Vec<Vec<f32>> = audio_data
+            	.chunks(chunk_size)
+             	.map(|chunk| {
+              		let mut frame_padded = vec![0.0; chunk_size];
+                	frame_padded[0..chunk.len()].copy_from_slice(chunk);
+                 	frame_padded
+              	})
+             	.collect();
 
             frames.par_iter_mut().for_each(|frame| {
             	let mut dsp = dsp_ptr.lock().unwrap();

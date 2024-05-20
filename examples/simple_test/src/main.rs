@@ -85,16 +85,16 @@ fn main() {
 
             let mut count = 0;
             loop {
-                let random_size = rng.gen_range(44100..(44100 * 10));
+                let random_size = rng.gen_range(88200..(44100 * 10));
                 let n: usize = random_size as usize;
                 // let index_audio_array = rng.gen_range(0..2);
                 let sig_size1 = audio_sigs[0].len();
-                let start_index1 = rng.gen_range(0..sig_size1 - 4096);
+                let start_index1 = rng.gen_range(0..sig_size1 - n);
                 let end_index1 = (start_index1 + random_size).min(sig_size1 - 1);
                 let audio_ref1: &[f32] = &audio_sigs[0][start_index1..end_index1];
 
                 let sig_size2 = audio_sigs[1].len();
-                let start_index2 = rng.gen_range(0..sig_size2 - 4096);
+                let start_index2 = rng.gen_range(0..sig_size2 - n);
                 let end_index2 = (start_index2 + random_size).min(sig_size2 - 1);
                 let audio_ref2: &[f32] = &audio_sigs[1][start_index2..end_index2];
 
