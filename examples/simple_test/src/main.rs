@@ -49,7 +49,7 @@ fn main() {
         ..StreamParameters::default()
     };
 
-    let mut q = Qubx::new(true);
+    let mut q = Qubx::new(false);
 
     // start monitor active processes
     q.start_monitoring_active_processes();

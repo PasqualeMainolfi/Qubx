@@ -182,18 +182,15 @@ impl Qubx {
 
         thread::sleep(std::time::Duration::from_secs(1));
 
-        if self.verbose {
-            let count = self.count_dsp_iterations.lock().unwrap();
-            let lat_amount = self.dsp_latency_amount.lock().unwrap();
-            let fac = if *count > 0.0 { *count } else { 1.0 };
-            let lat_amount = lat_amount.as_secs_f32() / fac;
-            print!(
-                "\n[PROCESSES INFO]\n:::Process Name: \"DSP\"\n:::Number of started processes: {}\n:::Latency average: {:?}\n\n",
-                *count as i32,
-                std::time::Duration::from_secs_f32(lat_amount),
-            );
-        }
-
+        let count = self.count_dsp_iterations.lock().unwrap();
+        let lat_amount = self.dsp_latency_amount.lock().unwrap();
+        let fac = if *count > 0.0 { *count } else { 1.0 };
+        let lat_amount = lat_amount.as_secs_f32() / fac;
+        print!(
+            "\n[PROCESSES INFO]\n:::Process Name: \"DSP\"\n:::Number of started processes: {}\n:::Latency average: {:?}\n\n",
+            *count as i32,
+            std::time::Duration::from_secs_f32(lat_amount),
+        );
         println!("[INFO] Done!");
     }
 }
