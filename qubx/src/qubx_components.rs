@@ -345,6 +345,7 @@ pub struct DspProcess {
     verbose: Arc<AtomicBool>,
     dsp_latency_amount: Arc<Mutex<std::time::Duration>>,
     count_dsp_iterations: Arc<Mutex<f32>>,
+    use_parallel_computation: bool
 }
 
 impl DspProcess {
@@ -354,6 +355,7 @@ impl DspProcess {
         verbose: Arc<AtomicBool>,
         dsp_latency_amount: Arc<Mutex<std::time::Duration>>,
         count_dsp_iterations: Arc<Mutex<f32>>,
+        use_parallel: bool
     ) -> Self {
         Self {
             monitor_processes,
@@ -361,6 +363,7 @@ impl DspProcess {
             verbose,
             dsp_latency_amount,
             count_dsp_iterations,
+            use_parallel_computation: use_parallel
         }
     }
 
@@ -401,6 +404,7 @@ impl DspProcess {
         let dsp_ptr = Arc::new(Mutex::new(dsp_function));
 
         let audio_size = audio_data.len();
+        let use_par_ptr = Arc::new(self.use_parallel_computation);
 
         thread::spawn(move || {
             let start = std::time::Instant::now();
@@ -416,14 +420,21 @@ impl DspProcess {
              	.map(|chunk| {
               		let mut frame_padded = vec![0.0; chunk_size];
                 	frame_padded[0..chunk.len()].copy_from_slice(chunk);
-                 	frame_padded
+                 	if *use_par_ptr {
+                  		let mut dsp = dsp_ptr.lock().unwrap();
+                  		dsp(&mut frame_padded)
+                  	}
+                   	frame_padded
               	})
              	.collect();
 
-            frames.par_iter_mut().for_each(|frame| {
-            	let mut dsp = dsp_ptr.lock().unwrap();
-            	dsp(frame)
-            });
+            if *use_par_ptr {
+	            frames.par_iter_mut().for_each(|frame| {
+	            	let mut dsp = dsp_ptr.lock().unwrap();
+	            	dsp(frame);
+	             	drop(dsp)
+	            })
+            }
 
             let m = mclone.lock().unwrap();
             let qclone = Arc::clone(&m.qlist);

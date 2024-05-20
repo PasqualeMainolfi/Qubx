@@ -127,7 +127,7 @@ impl Qubx {
     /// --------
     ///
     /// `QubxDspProcess`
-    pub fn create_parallel_dsp_process(&self, master_streamout_name: String) -> QubxDspProcess {
+    pub fn create_parallel_dsp_process(&self, master_streamout_name: String, use_parallel: bool) -> QubxDspProcess {
         let master_ptr = self.master_streamouts.get(&master_streamout_name).unwrap();
         let dsp_process = DspProcess::new(
             Arc::clone(&self.processes_monitor_ptr),
@@ -135,6 +135,7 @@ impl Qubx {
             Arc::new(AtomicBool::new(self.verbose)),
             Arc::clone(&self.dsp_latency_amount),
             Arc::clone(&self.count_dsp_iterations),
+            use_parallel
         );
         QubxDspProcess::new(
             Arc::clone(&self.processes_monitor_ptr),
