@@ -397,7 +397,13 @@ impl DspProcess {
         let verbose = Arc::clone(&self.verbose);
         let dsp_lat_amount_clone = Arc::clone(&self.dsp_latency_amount);
         let count_iter = Arc::clone(&self.count_dsp_iterations);
+
         let dsp_ptr = Arc::new(Mutex::new(dsp_function));
+        let dsp_ptr_clone = if self.use_parallel_computation {
+        	Some(Arc::clone(&dsp_ptr))
+        } else {
+        	None
+        };
 
         let audio_size = audio_data.len();
         let use_par_ptr = Arc::new(self.use_parallel_computation);
@@ -417,18 +423,15 @@ impl DspProcess {
               		let mut frame_padded = vec![0.0; chunk_size];
                 	frame_padded[0..chunk.len()].copy_from_slice(chunk);
                  	if !*use_par_ptr {
-                  		let mut dsp = dsp_ptr.lock().unwrap();
-                  		dsp(&mut frame_padded)
+                  		(dsp_ptr.lock().unwrap())(&mut frame_padded)
                   	}
                    	frame_padded
               	})
              	.collect();
 
-            if *use_par_ptr {
+            if let Some(dsp_clone) = dsp_ptr_clone {
 	            frames.par_iter_mut().for_each(|frame| {
-	            	let mut dsp = dsp_ptr.lock().unwrap();
-	            	dsp(frame);
-	             	drop(dsp)
+	            	(dsp_clone.lock().unwrap())(frame);
 	            })
             }
 
