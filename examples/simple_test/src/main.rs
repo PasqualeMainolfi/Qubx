@@ -85,9 +85,8 @@ fn main() {
 
             let mut count = 0;
             loop {
-                let random_size = rng.gen_range(88200..(44100 * 10));
+                let random_size = rng.gen_range(4096..(44100));
                 let n: usize = random_size as usize;
-                // let index_audio_array = rng.gen_range(0..2);
                 let sig_size1 = audio_sigs[0].len();
                 let start_index1 = rng.gen_range(0..sig_size1 - n);
                 let end_index1 = (start_index1 + random_size).min(sig_size1 - 1);
@@ -114,15 +113,19 @@ fn main() {
                     *sample2 *= envelope[i];
                 }
 
-                dsp_process1.start(audio_data1, move |audio_data| {
-                    for sample in audio_data.iter_mut() {
-                        *sample *= 0.7;
-                    }
+                dsp_process1.start(audio_data1, move |_audio_data| {
+                	for sample in _audio_data.iter_mut() {
+                 		*sample *= 0.7;
+                 	}
                 });
 
-                dsp_process2.start(audio_data2, move |_audio_data| {});
+                dsp_process2.start(audio_data2, move |_audio_data| {
+                	for sample in _audio_data.iter_mut() {
+                 		*sample *= 0.7;
+                 	}
+                });
 
-                if count >= 5 {
+                if count >= 1000 {
                     run = false
                 }
                 count += 1;
@@ -131,7 +134,7 @@ fn main() {
                     break;
                 }
 
-                let delay = rng.gen_range(0.1..2.1);
+                let delay = rng.gen_range(0.001..0.01);
                 thread::sleep(Duration::from_secs_f32(delay));
             }
         }

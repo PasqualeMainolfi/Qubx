@@ -399,11 +399,7 @@ impl DspProcess {
         let count_iter = Arc::clone(&self.count_dsp_iterations);
 
         let dsp_ptr = Arc::new(Mutex::new(dsp_function));
-        let dsp_ptr_clone = if self.use_parallel_computation {
-        	Some(Arc::clone(&dsp_ptr))
-        } else {
-        	None
-        };
+        let dsp_ptr_clone = Arc::clone(&dsp_ptr);
 
         let audio_size = audio_data.len();
         let use_par_ptr = Arc::new(self.use_parallel_computation);
@@ -429,10 +425,11 @@ impl DspProcess {
               	})
              	.collect();
 
-            if let Some(dsp_clone) = dsp_ptr_clone {
+            if *use_par_ptr {
 	            frames.par_iter_mut().for_each(|frame| {
-	            	(dsp_clone.lock().unwrap())(frame);
-	            })
+	            	(dsp_ptr_clone.lock().unwrap())(frame);
+	            });
+				drop(dsp_ptr_clone);
             }
 
             let m = mclone.lock().unwrap();
