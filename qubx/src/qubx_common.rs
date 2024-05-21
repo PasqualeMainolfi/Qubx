@@ -22,17 +22,17 @@ impl QubxExceptions {
 }
 
 /// Stream Parameters struct
-/// 
+///
 /// # Args
 /// ------
-/// 
-/// `chunk`: frames per buffer  
-/// `sr`: sample rate  
-/// `outchannels`: number of channels (output device)  
-/// `outdevice`: index of output device  
-/// `inchannels`: number of channels (input device)  
-/// `indevice`: index of input device  
-/// 
+///
+/// `chunk`: frames per buffer
+/// `sr`: sample rate
+/// `outchannels`: number of channels (output device)
+/// `outdevice`: index of output device
+/// `inchannels`: number of channels (input device)
+/// `indevice`: index of input device
+///
 
 #[derive(Debug)]
 pub struct StreamParameters {
@@ -54,7 +54,7 @@ impl Default for StreamParameters {
             outdevice: None,
             inchannels: 1,
             indevice: None
-        
+
         }
     }
 }

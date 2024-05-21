@@ -418,9 +418,6 @@ impl DspProcess {
              	.map(|chunk| {
               		let mut frame_padded = vec![0.0; chunk_size];
                 	frame_padded[0..chunk.len()].copy_from_slice(chunk);
-                 	if !*use_par_ptr {
-                  		(dsp_ptr.lock().unwrap())(&mut frame_padded)
-                  	}
                    	frame_padded
               	})
              	.collect();
@@ -429,7 +426,10 @@ impl DspProcess {
 	            frames.par_iter_mut().for_each(|frame| {
 	            	(dsp_ptr_clone.lock().unwrap())(frame);
 	            });
-				drop(dsp_ptr_clone);
+            } else {
+            	frames.iter_mut().for_each(|frame| {
+             		(dsp_ptr_clone.lock().unwrap()(frame));
+             	});
             }
 
             let m = mclone.lock().unwrap();
