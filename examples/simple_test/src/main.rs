@@ -25,11 +25,12 @@ fn hanning_window(size: usize) -> Vec<f32> {
 
 const SR: i32 = 44100;
 const CHANNELS: u32 = 1;
-const CHUNK: u32 = 4096;
+const CHUNK: u32 = 1024;
+
 
 const FILES: [&str; 2] = [
-    "./../audio_files_for_test/vox.wav",
-    "./../audio_files_for_test/suzanne_mono.wav",
+    "./../audio_files_for_test/maderna_continuo.wav",
+    "./../audio_files_for_test/maderna_continuo.wav",
 ];
 
 enum TestMode {
@@ -38,6 +39,7 @@ enum TestMode {
 }
 
 fn main() {
+	println!("[INFO] FRAME LENGTH: {}", CHUNK);
     let mode = TestMode::Output;
 
     let mut run = true;
@@ -67,14 +69,11 @@ fn main() {
 
         TestMode::Output => {
             let mut master_out = q.create_master_streamout(String::from("M1"), stream_params);
-            master_out.start(move |frame| {
-                for sample in frame.iter_mut() {
-                    *sample *= 0.7;
-                }
-            });
+            master_out.start(|frame| {
+                frame.iter_mut().for_each(|sample| { *sample *= 0.7 }) });
 
-            let mut dsp_process1 = q.create_parallel_dsp_process(String::from("M1"), false);
-            let mut dsp_process2 = q.create_parallel_dsp_process(String::from("M1"), false);
+            let mut dsp_process1 = q.create_parallel_dsp_process(String::from("M1"), true);
+            let mut dsp_process2 = q.create_parallel_dsp_process(String::from("M1"), true);
 
             let audio1 = open_file(FILES[0]);
             let audio2 = open_file(FILES[1]);
@@ -85,7 +84,7 @@ fn main() {
 
             let mut count = 0;
             loop {
-                let random_size = rng.gen_range(4096..(44100));
+                let random_size = rng.gen_range((44100 * (5 * 60))..(44100 * (7 * 60)));
                 let n: usize = random_size as usize;
                 let sig_size1 = audio_sigs[0].len();
                 let start_index1 = rng.gen_range(0..sig_size1 - n);
@@ -113,19 +112,17 @@ fn main() {
                     *sample2 *= envelope[i];
                 }
 
-                dsp_process1.start(audio_data1, move |_audio_data| {
-                	for sample in _audio_data.iter_mut() {
-                 		*sample *= 0.7;
-                 	}
+                dsp_process1.start(audio_data1, |_audio_data| {
+                	let y = _audio_data.iter().map(|sample| sample * 0.7).collect();
+                 	y
                 });
 
-                dsp_process2.start(audio_data2, move |_audio_data| {
-                	for sample in _audio_data.iter_mut() {
-                 		*sample *= 0.7;
-                 	}
+                dsp_process2.start(audio_data2, |_audio_data| {
+	               let y = _audio_data.iter().map(|sample| sample * 0.7).collect();
+	               y
                 });
 
-                if count >= 1000 {
+                if count >= 30 {
                     run = false
                 }
                 count += 1;
@@ -134,7 +131,7 @@ fn main() {
                     break;
                 }
 
-                let delay = rng.gen_range(0.001..0.01);
+                let delay = rng.gen_range(0.5..1.0);
                 thread::sleep(Duration::from_secs_f32(delay));
             }
         }

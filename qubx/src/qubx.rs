@@ -27,6 +27,7 @@ pub struct Qubx {
     pub processes_monitor_ptr: Arc<Mutex<MonitorProcess>>,
     run: Arc<AtomicBool>,
     dsp_latency_amount: Arc<Mutex<Duration>>,
+    // dsp_latency_amount: Arc<Atomi>,
     count_dsp_iterations: Arc<Mutex<f32>>,
 }
 
@@ -159,7 +160,6 @@ impl Qubx {
                 let mut m = monitor_clone.lock().unwrap();
                 m.remove_inactive_processes();
                 drop(m);
-                // thread::sleep(std::time::Duration::from_secs(1));
             }
         });
 
@@ -179,14 +179,6 @@ impl Qubx {
         println!("[INFO] Closing QUBX System...");
         self.run.store(false, Ordering::Release);
 
-        thread::sleep(std::time::Duration::from_millis(500));
-        println!("[PROCESS INFO] Terminating last active processes...");
-        let pclone = Arc::clone(&self.processes_monitor_ptr);
-        let mut p = pclone.lock().unwrap();
-        p.join_and_remove_all();
-
-        thread::sleep(std::time::Duration::from_secs(1));
-
         let count = self.count_dsp_iterations.lock().unwrap();
         let lat_amount = self.dsp_latency_amount.lock().unwrap();
         let fac = if *count > 0.0 { *count } else { 1.0 };
@@ -196,6 +188,14 @@ impl Qubx {
             *count as i32,
             std::time::Duration::from_secs_f32(lat_amount),
         );
+
+        thread::sleep(std::time::Duration::from_secs(1));
+        println!("[PROCESS INFO] Terminating last active processes...");
+        let pclone = Arc::clone(&self.processes_monitor_ptr);
+        let mut p = pclone.lock().unwrap();
+        p.join_and_remove_all();
+
+        thread::sleep(std::time::Duration::from_secs_f32(0.5));
         println!("[INFO] Done!");
     }
 }

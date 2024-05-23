@@ -332,7 +332,7 @@ impl DuplexProcess {
     }
 }
 
-/// # Dsp Process
+/// # Dsp Process (TODO: implement frame size for elab != chunk)
 ///
 ///
 pub struct DspProcess {
@@ -390,7 +390,7 @@ impl DspProcess {
     ///
     pub fn start<F>(&self, audio_data: Vec<f32>, dsp_function: F) -> JoinHandle<()>
     where
-        F: for<'a> FnMut(&'a mut [f32]) + Send + Sync + 'static,
+        F: for<'a> Fn(&'a [f32]) -> Vec<f32> + Send + Sync + 'static,
     {
         let pclone = Arc::clone(&self.monitor_processes);
         let mclone = Arc::clone(&self.master_streamout);
@@ -398,20 +398,19 @@ impl DspProcess {
         let dsp_lat_amount_clone = Arc::clone(&self.dsp_latency_amount);
         let count_iter = Arc::clone(&self.count_dsp_iterations);
 
-        let dsp_ptr = Arc::new(Mutex::new(dsp_function));
-        let dsp_ptr_clone = Arc::clone(&dsp_ptr);
+        // let dsp_ptr = Arc::new(Mutex::new(dsp_function));
+        // let dsp_ptr_clone = Arc::clone(&dsp_ptr);
 
         let audio_size = audio_data.len();
         let use_par_ptr = Arc::new(self.use_parallel_computation);
 
+        let params = self.master_streamout.lock().unwrap();
+        let chunk_size = (params.params.chunk * params.params.outchannels) as usize; // Frame length must be chunk size * nchnls out -> streamout
+        let ms_name = params.name.to_string();
+        drop(params);
+
         thread::spawn(move || {
             let start = std::time::Instant::now();
-
-            let m = mclone.lock().unwrap();
-            let ms_name = m.name.to_string();
-            let chunk_size = (m.params.chunk * m.params.outchannels) as usize; // Frame length must be chunk size * nchnls out -> streamout
-
-            drop(m);
 
             let mut frames: Vec<Vec<f32>> = audio_data
             	.chunks(chunk_size)
@@ -423,13 +422,9 @@ impl DspProcess {
              	.collect();
 
             if *use_par_ptr {
-	            frames.par_iter_mut().for_each(|frame| {
-	            	(dsp_ptr_clone.lock().unwrap())(frame);
-	            });
+	            frames = frames.par_iter().map(|frame| dsp_function(&frame)).collect();
             } else {
-            	frames.iter_mut().for_each(|frame| {
-             		(dsp_ptr_clone.lock().unwrap()(frame));
-             	});
+            	frames = frames.iter().map(|frame| dsp_function(&frame)).collect();
             }
 
             let m = mclone.lock().unwrap();
