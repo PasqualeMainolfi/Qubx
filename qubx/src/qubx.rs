@@ -123,6 +123,7 @@ impl Qubx {
     /// ------
     ///
     /// `master_streamout_name`: the name of the master streamout to associate with
+    /// `use_parallel`: use parallel-data (true) or not (false)
     ///
     /// # Return
     /// --------

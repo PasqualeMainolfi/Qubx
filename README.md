@@ -1,30 +1,31 @@
 # A RUST LIBRARY FOR REAL-TIME PARALLEL AUDIO STREAMS PROCESSING AND MANAGMENT
 
-Qubx is a Rust library for managing and processing audio streams in parallel.  
+Qubx is a Rust library for managing and processing audio streams in parallel.
 
 >**Version 0.1.0**
 
 - Creation and managment of an indefinite number of indipendent master audio output
 - Creation and managment of an indefinite number of indipendent duplex stream ($in \rightarrow dsp \rightarrow out$)
 - Possibility to create an indefinite number of dsp processes
+- Possibility to use parallel-data in each dsp process
 
 ## Usage
 
-First, add Qubx to dependencies (in Cargo.toml)  
+First, add Qubx to dependencies (in Cargo.toml)
 
 ```code
 [dependencies]
 
-qubx = { path="path_to/qubx" } 
+qubx = { path="path_to/qubx" }
 ```
 
 Compile, typing in the shell
-  
+
 ```shell
 cargo build --release
 ```
 
-Import Qubx and StreamParameters  
+Import Qubx and StreamParameters
 
 ```rust
 use qubx::{ Qubx, StreamParameters };
@@ -51,14 +52,15 @@ q.start_monitoring_active_processe();
 
 // create and starting master out
 let mut master_out = q.create_master_streamout(String::from("M1"), stream_params);
-master_out.start(move |frame| {
+master_out.start(|frame| {
     for sample in frame.iter_mut() {
         *sample *= 0.7;
     }
 });
 
 // create dsp process and associate it with master out names "M1"
-let mut dsp_process = q.create_parallel_dsp_process(String::from("M1"));
+// deactivate parallel-data (false)
+let mut dsp_process = q.create_parallel_dsp_process(String::from("M1"), false);
 
 loop {
 
@@ -67,10 +69,9 @@ loop {
     // .
     // ...generates audio_data
 
-    dsp_process1.start(audio_data, move |frame| {
-        for sample in frame.iter_mut() {
-            *sample *= 0.7;
-        }
+    dsp_process1.start(audio_data1, |_audio_data| {
+    	let y = _audio_data.iter().map(|sample| sample * 0.7).collect();
+     	y
     });
 
     if !run {
@@ -79,7 +80,7 @@ loop {
 
     let delay = rng.gen_range(0.1..2.1);
     thread::sleep(Duration::from_secs_f32(delay));
-            
+
 }
 
 // terminate and close qubx
@@ -104,5 +105,5 @@ The complete documentation, typing in the shell
 
 ```shell
 cargo doc --all
-cargo doc --open 
+cargo doc --open
 ```

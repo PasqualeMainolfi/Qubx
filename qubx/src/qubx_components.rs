@@ -369,17 +369,16 @@ impl DspProcess {
     /// ------
     ///
     /// `audio_data`: audio data to be processed
-    /// `dsp_function`: a closure that processes the audio streams. Take one arg frame `&mut [f32]`
+    /// `dsp_function`: a closure that processes the audio streams. Take one arg frame `&[f32]`, return a Vec<f32>
     ///
     /// Example:
     /// ```rust
-    /// let mut dsp_process = q.create_parallel_dsp_process(String::from("M1"));
+    /// let mut dsp_process = q.create_parallel_dsp_process(String::from("M1"), false);
     ///
-    /// dsp_process.start(audio_data, move |frame| {
-    /// for sample in frame.iter_mut() {
-    ///     *sample *= 0.7;
-    /// }
-    /// });
+    /// dsp_process1.start(audio_data1, |_audio_data| {
+    ///		let y = _audio_data.iter().map(|sample| sample * 0.7).collect();
+    /// 	y
+    ///	});
     ///
     /// ```
     ///
