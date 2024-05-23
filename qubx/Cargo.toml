@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 concurrent-queue = "2.4.0"
 portaudio = "0.7.0"
+rayon = "1.10.0"

@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle, ThreadId};
+use rayon::prelude::*;
 
 /// # Master Stream-out
 ///
@@ -86,7 +87,6 @@ impl MasterStreamoutProcess {
         let name1 = self.name.clone();
         let name2 = self.name.clone();
         let verb1 = Arc::clone(&self.verbose);
-        let verb2 = Arc::clone(&self.verbose);
 
         let count_latency_thread: Arc<Mutex<f32>> = Arc::new(Mutex::new(0.0));
         let count_clone = Arc::clone(&count_latency_thread);
@@ -124,14 +124,15 @@ impl MasterStreamoutProcess {
                 }
 
                 let elapsed_time = start_time.elapsed();
+                let mut lat_amount = latency_amount_clone.lock().unwrap();
+                *lat_amount += elapsed_time;
+                drop(lat_amount);
+                let mut count = count_clone.lock().unwrap();
+                *count += 1.0;
+                drop(count);
+
                 if verb1.load(Ordering::Acquire) {
                     println!("[PROCESS INFO] Thread:::[Name: MASTER OUTPUT {}]:::[ID: {:?}]:::[READ FROM QUEUES, PROCESS AND OUTPUT LATENCY: {:?}]", name1, thread::current().id(), elapsed_time);
-                    let mut lat_amount = latency_amount_clone.lock().unwrap();
-                    *lat_amount += elapsed_time;
-                    drop(lat_amount);
-                    let mut count = count_clone.lock().unwrap();
-                    *count += 1.0;
-                    drop(count);
                 }
 
                 pa::Continue
@@ -153,20 +154,18 @@ impl MasterStreamoutProcess {
                 continue;
             }
 
-            if verb2.load(Ordering::Acquire) {
-                let lat_amount_sec = latency_amount.lock().unwrap();
-                let count = count_latency_thread.lock().unwrap();
-                let fac = if *count > 0.0 { *count } else { 1.0 };
-                let lat_amount = lat_amount_sec.as_secs_f32() / fac;
-                print!(
-                    "\n[PROCESSES INFO]\n:::Process Name: Master streamout {}\n:::Process Id: {:?}\n:::Output device latency: {:?}\n:::Number of iterations: {}\n:::Latency average: {:?}\n\n",
-                    name2,
-                    thread::current().id(),
-                    std::time::Duration::from_secs_f32(latency as f32),
-                    *count as i32,
-                    std::time::Duration::from_secs_f32(lat_amount)
-                );
-            }
+            let lat_amount_sec = latency_amount.lock().unwrap();
+            let count = count_latency_thread.lock().unwrap();
+            let fac = if *count > 0.0 { *count } else { 1.0 };
+            let lat_amount = lat_amount_sec.as_secs_f32() / fac;
+            print!(
+                "\n[PROCESSES INFO]\n:::Process Name: Master streamout {}\n:::Process Id: {:?}\n:::Output device latency: {:?}\n:::Number of iterations: {}\n:::Latency average: {:?}\n\n",
+                name2,
+                thread::current().id(),
+                std::time::Duration::from_secs_f32(latency as f32),
+                *count as i32,
+                std::time::Duration::from_secs_f32(lat_amount)
+            );
 
             println!("[INFO] Closing stream-out PortAudio...");
             stream.stop().unwrap();
@@ -240,7 +239,6 @@ impl DuplexProcess {
         let chunk = params_clone.chunk;
         let run = Arc::clone(&self.run);
         let verb1 = Arc::clone(&self.verbose);
-        let verb2 = Arc::clone(&self.verbose);
 
         let count_latency_thread: Arc<Mutex<f32>> = Arc::new(Mutex::new(0.0));
         let count_clone = Arc::clone(&count_latency_thread);
@@ -274,14 +272,15 @@ impl DuplexProcess {
 
                 let end_time = start_time.elapsed();
 
+                let mut lat_amount = latency_amount_clone.lock().unwrap();
+                *lat_amount += end_time;
+                drop(lat_amount);
+                let mut count = count_clone.lock().unwrap();
+                *count += 1.0;
+                drop(count);
+
                 if verb1.load(Ordering::Acquire) {
                     println!("[PROCESS INFO] Thread:::[Name: \"DUPLEX STREAM\"]:::[ID: {:?}]:::[READ, PROCESS AND OUTPUT LATENCY: {:?}]", thread::current().id(), end_time);
-                    let mut lat_amount = latency_amount_clone.lock().unwrap();
-                    *lat_amount += end_time;
-                    drop(lat_amount);
-                    let mut count = count_clone.lock().unwrap();
-                    *count += 1.0;
-                    drop(count);
                 }
 
 
@@ -312,20 +311,18 @@ impl DuplexProcess {
                 continue;
             }
 
-            if verb2.load(Ordering::Acquire) {
-                let lat_amount_sec = latency_amount.lock().unwrap();
-                let count = count_latency_thread.lock().unwrap();
-                let fac = if *count > 0.0 { *count } else { 1.0 };
-                let lat_amount = lat_amount_sec.as_secs_f32() / fac;
-                print!(
-                    "\n[PROCESSES INFO]\n:::Process Name: Duplex Stream\n:::Process Id: {:?}\n:::Input device latency: {:?}\n:::Output device latency: {:?}\n:::Number of iterations: {}\n:::Latency average: {:?}\n\n",
-                    thread::current().id(),
-                    std::time::Duration::from_secs_f32(inlatency as f32),
-                    std::time::Duration::from_secs_f32(outlatency as f32),
-                    *count as i32,
-                    std::time::Duration::from_secs_f32(lat_amount)
-                );
-            }
+            let lat_amount_sec = latency_amount.lock().unwrap();
+            let count = count_latency_thread.lock().unwrap();
+            let fac = if *count > 0.0 { *count } else { 1.0 };
+            let lat_amount = lat_amount_sec.as_secs_f32() / fac;
+            print!(
+                "\n[PROCESSES INFO]\n:::Process Name: Duplex Stream\n:::Process Id: {:?}\n:::Input device latency: {:?}\n:::Output device latency: {:?}\n:::Number of iterations: {}\n:::Latency average: {:?}\n\n",
+                thread::current().id(),
+                std::time::Duration::from_secs_f32(inlatency as f32),
+                std::time::Duration::from_secs_f32(outlatency as f32),
+                *count as i32,
+                std::time::Duration::from_secs_f32(lat_amount)
+            );
 
             println!("[INFO] Closing PortaAudio duplex stream...");
             stream.stop().unwrap();
@@ -335,7 +332,7 @@ impl DuplexProcess {
     }
 }
 
-/// # Dsp Process
+/// # Dsp Process (TODO: implement frame size for elab != chunk)
 ///
 ///
 pub struct DspProcess {
@@ -344,6 +341,7 @@ pub struct DspProcess {
     verbose: Arc<AtomicBool>,
     dsp_latency_amount: Arc<Mutex<std::time::Duration>>,
     count_dsp_iterations: Arc<Mutex<f32>>,
+    use_parallel_computation: bool
 }
 
 impl DspProcess {
@@ -353,6 +351,7 @@ impl DspProcess {
         verbose: Arc<AtomicBool>,
         dsp_latency_amount: Arc<Mutex<std::time::Duration>>,
         count_dsp_iterations: Arc<Mutex<f32>>,
+        use_parallel: bool
     ) -> Self {
         Self {
             monitor_processes,
@@ -360,6 +359,7 @@ impl DspProcess {
             verbose,
             dsp_latency_amount,
             count_dsp_iterations,
+            use_parallel_computation: use_parallel
         }
     }
 
@@ -388,9 +388,9 @@ impl DspProcess {
     ///
     /// `JoinHandle<()>`
     ///
-    pub fn start<F>(&self, audio_data: Vec<f32>, mut dsp_function: F) -> JoinHandle<()>
+    pub fn start<F>(&self, audio_data: Vec<f32>, dsp_function: F) -> JoinHandle<()>
     where
-        F: for<'a> FnMut(&'a mut [f32]) + Send + Sync + 'static,
+        F: for<'a> Fn(&'a [f32]) -> Vec<f32> + Send + Sync + 'static,
     {
         let pclone = Arc::clone(&self.monitor_processes);
         let mclone = Arc::clone(&self.master_streamout);
@@ -398,29 +398,40 @@ impl DspProcess {
         let dsp_lat_amount_clone = Arc::clone(&self.dsp_latency_amount);
         let count_iter = Arc::clone(&self.count_dsp_iterations);
 
+        // let dsp_ptr = Arc::new(Mutex::new(dsp_function));
+        // let dsp_ptr_clone = Arc::clone(&dsp_ptr);
+
+        let audio_size = audio_data.len();
+        let use_par_ptr = Arc::new(self.use_parallel_computation);
+
+        let params = self.master_streamout.lock().unwrap();
+        let chunk_size = (params.params.chunk * params.params.outchannels) as usize; // Frame length must be chunk size * nchnls out -> streamout
+        let ms_name = params.name.to_string();
+        drop(params);
+
         thread::spawn(move || {
             let start = std::time::Instant::now();
 
-            let m = mclone.lock().unwrap();
-            let ms_name = m.name.to_string();
-            let chunk_size = (m.params.chunk * m.params.outchannels) as usize; // Frame length must be chunk size * nchnls out -> streamout
-
-            drop(m);
-
-            let frames: Vec<Vec<f32>> = audio_data.chunks(chunk_size)
-                .map(|chunk| {
-                	let mut frame_padded = vec![0.0; chunk_size];
-                 	frame_padded[0..chunk.len()].copy_from_slice(chunk);
-                  	dsp_function(&mut frame_padded);
+            let mut frames: Vec<Vec<f32>> = audio_data
+            	.chunks(chunk_size)
+             	.map(|chunk| {
+              		let mut frame_padded = vec![0.0; chunk_size];
+                	frame_padded[0..chunk.len()].copy_from_slice(chunk);
                    	frame_padded
-                })
-                .collect();
+              	})
+             	.collect();
+
+            if *use_par_ptr {
+	            frames = frames.par_iter().map(|frame| dsp_function(&frame)).collect();
+            } else {
+            	frames = frames.iter().map(|frame| dsp_function(&frame)).collect();
+            }
 
             let m = mclone.lock().unwrap();
             let qclone = Arc::clone(&m.qlist);
             let mut q = qclone.lock().unwrap();
-            for frame in frames.iter() {
-                q.put_frame(frame.clone());
+            for f in frames.iter() {
+            	q.put_frame(f.clone());
             }
 
             q.get_next_empty_queue();
@@ -431,15 +442,15 @@ impl DspProcess {
             let end = start.elapsed();
             let id = thread::current().id();
 
+            let mut lat_amount = dsp_lat_amount_clone.lock().unwrap();
+            *lat_amount += end;
+            drop(lat_amount);
+
+            let mut count = count_iter.lock().unwrap();
+            *count += 1.0;
+            drop(count);
+
             if verbose.load(Ordering::Acquire) {
-                let mut lat_amount = dsp_lat_amount_clone.lock().unwrap();
-                *lat_amount += end;
-                drop(lat_amount);
-
-                let mut count = count_iter.lock().unwrap();
-                *count += 1.0;
-                drop(count);
-
                 println!(
                     "[PROCESS INFO] Thread:::[Name: \"DSP\" >>> Master streamout {}]:::[ID: {:?}]:::[PROCESS AND WRITE TO QUEUE LATENCY: {:?}]",
                     ms_name,

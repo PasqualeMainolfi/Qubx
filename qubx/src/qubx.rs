@@ -27,6 +27,7 @@ pub struct Qubx {
     pub processes_monitor_ptr: Arc<Mutex<MonitorProcess>>,
     run: Arc<AtomicBool>,
     dsp_latency_amount: Arc<Mutex<Duration>>,
+    // dsp_latency_amount: Arc<Atomi>,
     count_dsp_iterations: Arc<Mutex<f32>>,
 }
 
@@ -127,7 +128,12 @@ impl Qubx {
     /// --------
     ///
     /// `QubxDspProcess`
-    pub fn create_parallel_dsp_process(&self, master_streamout_name: String) -> QubxDspProcess {
+    pub fn create_parallel_dsp_process(&self, master_streamout_name: String, use_parallel: bool) -> QubxDspProcess {
+
+    	if use_parallel {
+     		println!("[INFO] Parallel computation activated on DspProcess:::[{}]", master_streamout_name.clone());
+     	}
+
         let master_ptr = self.master_streamouts.get(&master_streamout_name).unwrap();
         let dsp_process = DspProcess::new(
             Arc::clone(&self.processes_monitor_ptr),
@@ -135,6 +141,7 @@ impl Qubx {
             Arc::new(AtomicBool::new(self.verbose)),
             Arc::clone(&self.dsp_latency_amount),
             Arc::clone(&self.count_dsp_iterations),
+            use_parallel
         );
         QubxDspProcess::new(
             Arc::clone(&self.processes_monitor_ptr),
@@ -153,8 +160,6 @@ impl Qubx {
                 let mut m = monitor_clone.lock().unwrap();
                 m.remove_inactive_processes();
                 drop(m);
-
-                thread::sleep(std::time::Duration::from_secs(1));
             }
         });
 
@@ -174,26 +179,23 @@ impl Qubx {
         println!("[INFO] Closing QUBX System...");
         self.run.store(false, Ordering::Release);
 
-        thread::sleep(std::time::Duration::from_millis(500));
+        let count = self.count_dsp_iterations.lock().unwrap();
+        let lat_amount = self.dsp_latency_amount.lock().unwrap();
+        let fac = if *count > 0.0 { *count } else { 1.0 };
+        let lat_amount = lat_amount.as_secs_f32() / fac;
+        print!(
+            "\n[PROCESSES INFO]\n:::Process Name: \"DSP\"\n:::Number of started processes: {}\n:::Latency average: {:?}\n\n",
+            *count as i32,
+            std::time::Duration::from_secs_f32(lat_amount),
+        );
+
+        thread::sleep(std::time::Duration::from_secs(1));
         println!("[PROCESS INFO] Terminating last active processes...");
         let pclone = Arc::clone(&self.processes_monitor_ptr);
         let mut p = pclone.lock().unwrap();
         p.join_and_remove_all();
 
-        thread::sleep(std::time::Duration::from_secs(1));
-
-        if self.verbose {
-            let count = self.count_dsp_iterations.lock().unwrap();
-            let lat_amount = self.dsp_latency_amount.lock().unwrap();
-            let fac = if *count > 0.0 { *count } else { 1.0 };
-            let lat_amount = lat_amount.as_secs_f32() / fac;
-            print!(
-                "\n[PROCESSES INFO]\n:::Process Name: \"DSP\"\n:::Number of started processes: {}\n:::Latency average: {:?}\n\n",
-                *count as i32,
-                std::time::Duration::from_secs_f32(lat_amount),
-            );
-        }
-
+        thread::sleep(std::time::Duration::from_secs_f32(0.5));
         println!("[INFO] Done!");
     }
 }

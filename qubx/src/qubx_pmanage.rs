@@ -89,7 +89,7 @@ impl QubxDspProcess {
 
     pub fn start<F>(&self, audio_data: Vec<f32>, dsp_function: F)
     where
-        F: for<'a> FnMut(&'a mut [f32]) + Send + Sync + 'static,
+        F: for<'a> Fn(&'a [f32]) -> Vec<f32> + Send + Sync + 'static,
     {
         let pclone = Arc::clone(&self.process);
         let p = pclone.lock().unwrap();
