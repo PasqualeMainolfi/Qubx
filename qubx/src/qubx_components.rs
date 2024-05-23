@@ -376,9 +376,9 @@ impl DspProcess {
     /// let mut dsp_process = q.create_parallel_dsp_process(String::from("M1"), false);
     ///
     /// dsp_process1.start(audio_data1, |_audio_data| {
-    ///		let y = _audio_data.iter().map(|sample| sample * 0.7).collect();
-    /// 	y
-    ///	});
+    /// let y = _audio_data.iter().map(|sample| sample * 0.7).collect();
+    /// y
+    /// });
     ///
     /// ```
     ///
@@ -421,9 +421,9 @@ impl DspProcess {
              	.collect();
 
             if *use_par_ptr {
-	            frames = frames.par_iter().map(|frame| dsp_function(&frame)).collect();
+	            frames = frames.par_iter().map(|frame| dsp_function(frame)).collect();
             } else {
-            	frames = frames.iter().map(|frame| dsp_function(&frame)).collect();
+            	frames = frames.iter().map(|frame| dsp_function(frame)).collect();
             }
 
             let m = mclone.lock().unwrap();
