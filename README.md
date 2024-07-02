@@ -1,8 +1,8 @@
 # QUBX: A RUST LIBRARY FOR QUEUE-BASED MULTITHREADED REAL-TIME PARALLEL AUDIO STREAMS PROCESSING AND MANAGEMENT
 
 Qubx is a Rust library for managing and processing audio streams in parallel.  
-Related paper: P. Mainolfi, Qubx: a Rust Library for Queue-Based Real-Time 
-Parallel Audio Streams Processing and Managment, Dafx24, Surrey UK, 2024.  
+Related paper: P. Mainolfi, Qubx: a Rust Library for Queue-Based Multithreaded 
+Real-Time Parallel Audio Streams Processing and Managment, Dafx24, Surrey UK, 2024.  
 
 
 >**Version 0.1.0**
