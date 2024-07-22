@@ -59,7 +59,7 @@ impl Qubx {
     /// # Get devices index and info
     ///
     ///
-    pub fn get_devices_info() {
+    pub fn get_devices_info(&self) {
         let port_audio = pa::PortAudio::new().unwrap();
         let devices = port_audio.devices().unwrap();
         for device in devices {
