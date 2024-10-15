@@ -1,8 +1,8 @@
 #![allow(unused_imports, unused_variables, unused_mut, dead_code)]
 
-use qubx::{Qubx, StreamParameters};
+use qubx::{ Qubx, StreamParameters, ProcessArg, DspProcessArgs, DspClosureNoArgsType, DspClosureWithArgsType, DuplexClosureType, MasterClosureType };
 use rand::Rng;
-use std::{cmp::min, fs::File, thread, time::Duration};
+use std::{ cmp::min, fs::File, thread, time::Duration };
 
 fn open_file(path: &str) -> Vec<f32> {
     let file = File::open(path).unwrap_or_else(|err| {
@@ -60,7 +60,8 @@ fn main() {
     match mode {
         TestMode::Input => {
             let mut duplex = q.create_duplex_dsp_process(stream_params);
-            duplex.start(Some(|frame: &[f32]| frame.to_vec()));
+            let clos: DuplexClosureType = Box::new(|frame| frame.to_vec());
+            duplex.start(ProcessArg::Closure::<DuplexClosureType>(clos));
 
             for i in 0..(10 * SR as usize) {
                 std::thread::sleep(std::time::Duration::from_secs_f32(1.0 / SR as f32));
@@ -69,8 +70,11 @@ fn main() {
 
         TestMode::Output => {
             let mut master_out = q.create_master_streamout(String::from("M1"), stream_params);
-            master_out.start(Some(|frame: &mut [f32]| {
-                frame.iter_mut().for_each(|sample| { *sample *= 0.7 }) }));
+            let master_clos: MasterClosureType = Box::new(|frame| {
+                frame.iter_mut().for_each(|sample| { *sample *= 0.7 }) 
+            });
+
+            master_out.start(ProcessArg::Closure::<MasterClosureType>(master_clos));
 
             let mut dsp_process1 = q.create_parallel_dsp_process(String::from("M1"), true);
             let mut dsp_process2 = q.create_parallel_dsp_process(String::from("M1"), true);
@@ -112,16 +116,14 @@ fn main() {
                     *sample2 *= envelope[i];
                 }
 
-                dsp_process1.start(audio_data1, Some(|_audio_data: &[f32]| {
+                let dsp_clos: DspClosureWithArgsType = Box::new(|_audio_data| {
                 	let y = _audio_data.iter().map(|sample| sample * 0.7).collect();
                  	y
-                }));
+                });
 
-                dsp_process2.start(audio_data2, Some(|_audio_data: &[f32]| {
-	               let y = _audio_data.iter().map(|sample| sample * 0.7).collect();
-	               y
-                }));
-
+                dsp_process1.start(DspProcessArgs::AudioDataAndClosure::<DspClosureNoArgsType, DspClosureWithArgsType>(audio_data1, dsp_clos));
+                dsp_process2.start(DspProcessArgs::AudioData::<DspClosureNoArgsType, DspClosureWithArgsType>(audio_data2));
+                
                 if count >= 30 {
                     run = false
                 }
