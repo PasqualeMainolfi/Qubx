@@ -1,11 +1,9 @@
 [package]
-name = "qubx"
+name = "envelope_test"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-concurrent-queue = "2.4.0"
-portaudio = "0.8.0"
-rayon = "1.10.0"
+qubx = { path = "/Users/pm/AcaHub/Coding/Qubx/QubxRust/qubx" }

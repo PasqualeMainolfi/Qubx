@@ -1,6 +1,5 @@
 use qubx::qenvelopes::{ QEnvMode, QEnvelope };
 
-
 fn main() {
 	let env_points = vec![0.0001, 0.1, 1.0, 1.0, 0.0];
 	let sr: f64 = 100.0;
