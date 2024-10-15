@@ -46,7 +46,7 @@ impl MasterStreamoutProcess {
     /// # Args
     /// ------
     ///
-    /// `dsp_function`: a closure that processes the summation of audio streams from all processes associated with the stream output. Take one arg
+    /// `Option<dsp_function>`: a closure that processes the summation of audio streams from all processes associated with the stream output. Take one arg
     /// `frame`: `&mut [f32]` (frame to be processed)
     ///
     /// Example:
@@ -65,7 +65,7 @@ impl MasterStreamoutProcess {
     ///
     /// `JoinHandle<()>`
     ///
-    pub fn start<F>(&self, mut dsp_function: F) -> JoinHandle<()>
+    pub fn start<F>(&self, mut dsp_function: Option<F>) -> JoinHandle<()>
     where
         F: for<'a> FnMut(&'a mut [f32]) + Send + Sync + 'static,
     {
@@ -115,7 +115,7 @@ impl MasterStreamoutProcess {
                 // APPLY DSP TO MULTICHANNEL AUDIO OUT -> ON BUFFER VECTOR OR PASS DSP FUNCTION
                 // .
 
-                dsp_function(&mut block);
+                if let Some(dsp_func) = dsp_function.as_mut() { dsp_func(&mut block) };
 
                 // .
 
@@ -199,7 +199,7 @@ impl DuplexProcess {
     /// # Args
     /// ------
     ///
-    /// `dsp_function`: a closure that processes the audio streams. Take one arg frame: `&[f32]` (frame to be processed) and must be return
+    /// `Option<dsp_function>`: a closure that processes the audio streams. Take one arg frame: `&[f32]` (frame to be processed) and must be return
     /// a `Vec<f32>` (frame to output)
     ///
     /// Example:
@@ -213,7 +213,7 @@ impl DuplexProcess {
     ///
     /// `JoinHandle<()>`
     ///
-    pub fn start<F>(&self, mut dsp_function: F) -> JoinHandle<()>
+    pub fn start<F>(&self, mut dsp_function: Option<F>) -> JoinHandle<()>
     where
         F: for<'a> FnMut(&'a [f32]) -> Vec<f32> + Send + Sync + 'static,
     {
@@ -262,7 +262,10 @@ impl DuplexProcess {
 
                 // ATTENTION: is interleaved format! length of inblock is chunk * chnls
 
-                let dsp_inblock = dsp_function(&inblock);
+                let dsp_inblock = match dsp_function.as_mut() {
+                    Some(dsp_func) => dsp_func(&inblock),
+                    None => inblock
+                };
 
                 assert_eq!(dsp_inblock.len(), out_buffer.len(), "[ERROR] The frame returned by the closure must have the same number of channels as the out frame!");
 
@@ -369,7 +372,7 @@ impl DspProcess {
     /// ------
     ///
     /// `audio_data`: audio data to be processed
-    /// `dsp_function`: a closure that processes the audio streams. Take one arg frame `&[f32]`, return a Vec<f32>
+    /// `Option<dsp_function>`: a closure that processes the audio streams. Take one arg frame `&[f32]`, return a Vec<f32>
     ///
     /// Example:
     /// ```rust
@@ -387,7 +390,7 @@ impl DspProcess {
     ///
     /// `JoinHandle<()>`
     ///
-    pub fn start<F>(&self, audio_data: Vec<f32>, dsp_function: F) -> JoinHandle<()>
+    pub fn start<F>(&self, audio_data: Vec<f32>, dsp_function: Option<F>) -> JoinHandle<()>
     where
         F: for<'a> Fn(&'a [f32]) -> Vec<f32> + Send + Sync + 'static,
     {
@@ -420,10 +423,12 @@ impl DspProcess {
               	})
              	.collect();
 
-            if *use_par_ptr {
-	            frames = frames.par_iter().map(|frame| dsp_function(frame)).collect();
-            } else {
-            	frames = frames.iter().map(|frame| dsp_function(frame)).collect();
+            if let Some(dsp_func) = dsp_function { 
+                if *use_par_ptr {
+                    frames = frames.par_iter().map(|frame| dsp_func(frame)).collect()
+                } else {
+                    frames = frames.iter().map(|frame| dsp_func(frame)).collect();
+                }
             }
 
             let m = mclone.lock().unwrap();

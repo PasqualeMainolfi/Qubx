@@ -18,7 +18,7 @@ impl QubxMasterProcess {
         }
     }
 
-    pub fn start<F>(&self, dsp_master_function: F)
+    pub fn start<F>(&self, dsp_master_function: Option<F>)
     where
         F: for<'a> FnMut(&'a mut [f32]) + Send + Sync + 'static,
     {
@@ -51,7 +51,7 @@ impl QubxDuplexProcess {
         }
     }
 
-    pub fn start<F>(&self, dsp_function: F)
+    pub fn start<F>(&self, dsp_function: Option<F>)
     where
         F: for<'a> FnMut(&'a [f32]) -> Vec<f32> + Send + Sync + 'static,
     {
@@ -87,7 +87,7 @@ impl QubxDspProcess {
         }
     }
 
-    pub fn start<F>(&self, audio_data: Vec<f32>, dsp_function: F)
+    pub fn start<F>(&self, audio_data: Vec<f32>, dsp_function: Option<F>)
     where
         F: for<'a> Fn(&'a [f32]) -> Vec<f32> + Send + Sync + 'static,
     {
