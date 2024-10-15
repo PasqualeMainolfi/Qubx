@@ -1,15 +1,27 @@
 #![allow(unused_variables, dead_code)]
 
 use crate::qlist::QList;
-use crate::qubx_common::{Process, ProcessState, StreamParameters};
+use crate::qubx_common::{ DspProcessArgs, Process, ProcessArg, ProcessState, StreamParameters };
 use pa::PortAudio;
 use portaudio as pa;
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use std::thread::{self, JoinHandle, ThreadId};
+use std::sync::atomic::{ AtomicBool, Ordering };
+use std::sync::{ Arc, Mutex };
+use std::thread::{ self, JoinHandle, ThreadId };
 use rayon::prelude::*;
+
+fn get_chunks(audio_data: Vec<f32>, chunk_size: usize) -> Vec<Vec<f32>> {
+    let frames :Vec<Vec<f32>> = audio_data
+    .chunks(chunk_size)
+    .map(|chunk| {
+        let mut frame_padded = vec![0.0; chunk_size];
+        frame_padded[0..chunk.len()].copy_from_slice(chunk);
+        frame_padded
+    })
+    .collect();
+    frames
+}
 
 /// # Master Stream-out
 ///
@@ -46,17 +58,18 @@ impl MasterStreamoutProcess {
     /// # Args
     /// ------
     ///
-    /// `Option<dsp_function>`: a closure that processes the summation of audio streams from all processes associated with the stream output. Take one arg
+    /// `arg`: can be ProcessArg::NoArgs (means take no argumets) or ProcessArg::Closure::<MasterClosureType>(closure).
+    /// Closure that processes the summation of audio streams from all processes associated with the stream output. Take one arg
     /// `frame`: `&mut [f32]` (frame to be processed)
     ///
     /// Example:
     ///
     /// ```rust
     /// let mut master_out = q.create_master_streamout(String::from("M1"), stream_params);
-    /// master_out.start(move |frame| {
-    ///    for sample in frame.iter_mut() {
-    ///        *sample *= 0.7;
-    ///    }
+    /// let master_clos: MasterClosureType = Box::new(|frame| {
+    ///    frame.iter_mut().for_each(|sample| { *sample *= 0.7 }) 
+    /// });
+    /// master_out.start(ProcessArg::Closure::<MasterClosureType>(master_clos));
     /// });
     /// ```
     ///
@@ -65,7 +78,7 @@ impl MasterStreamoutProcess {
     ///
     /// `JoinHandle<()>`
     ///
-    pub fn start<F>(&self, mut dsp_function: Option<F>) -> JoinHandle<()>
+    pub fn start<F>(&self, mut arg: ProcessArg<F>) -> JoinHandle<()>
     where
         F: for<'a> FnMut(&'a mut [f32]) + Send + Sync + 'static,
     {
@@ -115,8 +128,11 @@ impl MasterStreamoutProcess {
                 // APPLY DSP TO MULTICHANNEL AUDIO OUT -> ON BUFFER VECTOR OR PASS DSP FUNCTION
                 // .
 
-                if let Some(dsp_func) = dsp_function.as_mut() { dsp_func(&mut block) };
-
+                match arg {
+                    ProcessArg::NoArgs => { },
+                    ProcessArg::Closure(ref mut dsp_function) => dsp_function(&mut block),
+                };
+                
                 // .
 
                 for (i, sample) in buffer.iter_mut().enumerate() {
@@ -199,13 +215,15 @@ impl DuplexProcess {
     /// # Args
     /// ------
     ///
-    /// `Option<dsp_function>`: a closure that processes the audio streams. Take one arg frame: `&[f32]` (frame to be processed) and must be return
+    /// `arg`: can be ProcessArg::NoArgs (means take no argumets) or ProcessArg::Closure::<DuplexClosureType>(closure).  
+    /// Closure that processes the audio streams. Take one arg frame: `&[f32]` (frame to be processed) and must be return
     /// a `Vec<f32>` (frame to output)
     ///
     /// Example:
     /// ```rust
     /// let mut duplex = q.create_duplex_dsp_process(stream_params);
-    /// duplex.start(|frame| { frame.to_vec() });
+    /// let clos: DuplexClosureType = Box::new(|frame| frame.to_vec());
+    /// duplex.start(ProcessArg::Closure::<DuplexClosureType>(clos));
     /// ```
     ///
     /// # Return
@@ -213,7 +231,7 @@ impl DuplexProcess {
     ///
     /// `JoinHandle<()>`
     ///
-    pub fn start<F>(&self, mut dsp_function: Option<F>) -> JoinHandle<()>
+    pub fn start<F>(&self, mut arg: ProcessArg<F>) -> JoinHandle<()>
     where
         F: for<'a> FnMut(&'a [f32]) -> Vec<f32> + Send + Sync + 'static,
     {
@@ -262,11 +280,11 @@ impl DuplexProcess {
 
                 // ATTENTION: is interleaved format! length of inblock is chunk * chnls
 
-                let dsp_inblock = match dsp_function.as_mut() {
-                    Some(dsp_func) => dsp_func(&inblock),
-                    None => inblock
+                let dsp_inblock = match arg {
+                    ProcessArg::NoArgs => inblock,
+                    ProcessArg::Closure(ref mut dsp_function) => dsp_function(&inblock)
                 };
-
+                
                 assert_eq!(dsp_inblock.len(), out_buffer.len(), "[ERROR] The frame returned by the closure must have the same number of channels as the out frame!");
 
                 for (i, sample) in dsp_inblock.iter().enumerate() {
@@ -371,17 +389,20 @@ impl DspProcess {
     /// # Args
     /// ------
     ///
-    /// `audio_data`: audio data to be processed
-    /// `Option<dsp_function>`: a closure that processes the audio streams. Take one arg frame `&[f32]`, return a Vec<f32>
+    /// `args`: can be DspProcessArgs::AudioData (require audio vector only <Vec<f32>>), 
+    /// DspProcessArgs::Closure:::<DspClosureNoArgsType, DspClosureWithArgsType> (pass a closure thare take no arguments and return Vec<f32>) or 
+    /// DspProcessArgs::AudioAndClosure::<DspClosureNoArgsType, DspClosureWithArgsType> (pass audio data as Vec<f32> and closure. 
+    /// Closure take one argument &[f32] and return a Vec<f32>).
     ///
     /// Example:
     /// ```rust
-    /// let mut dsp_process = q.create_parallel_dsp_process(String::from("M1"), false);
-    ///
-    /// dsp_process1.start(audio_data1, |_audio_data| {
+    /// let dsp_clos: DspClosureWithArgsType = Box::new(|_audio_data| {
     /// let y = _audio_data.iter().map(|sample| sample * 0.7).collect();
     /// y
     /// });
+    ///
+    /// dsp_process1.start(DspProcessArgs::AudioDataAndClosure::<DspClosureNoArgsType, DspClosureWithArgsType>(audio_data1, dsp_clos));
+    /// dsp_process2.start(DspProcessArgs::AudioData::<DspClosureNoArgsType, DspClosureWithArgsType>(audio_data2));
     ///
     /// ```
     ///
@@ -390,9 +411,10 @@ impl DspProcess {
     ///
     /// `JoinHandle<()>`
     ///
-    pub fn start<F>(&self, audio_data: Vec<f32>, dsp_function: Option<F>) -> JoinHandle<()>
+    pub fn start<F1, F2>(&self, args: DspProcessArgs<F1, F2>) -> JoinHandle<()>
     where
-        F: for<'a> Fn(&'a [f32]) -> Vec<f32> + Send + Sync + 'static,
+        F1: Fn() -> Vec<f32> + Send + Sync + 'static,
+        F2: for<'a> Fn(&'a [f32]) -> Vec<f32> + Send + Sync + 'static,
     {
         let pclone = Arc::clone(&self.monitor_processes);
         let mclone = Arc::clone(&self.master_streamout);
@@ -403,7 +425,6 @@ impl DspProcess {
         // let dsp_ptr = Arc::new(Mutex::new(dsp_function));
         // let dsp_ptr_clone = Arc::clone(&dsp_ptr);
 
-        let audio_size = audio_data.len();
         let use_par_ptr = Arc::new(self.use_parallel_computation);
 
         let params = self.master_streamout.lock().unwrap();
@@ -414,22 +435,28 @@ impl DspProcess {
         thread::spawn(move || {
             let start = std::time::Instant::now();
 
-            let mut frames: Vec<Vec<f32>> = audio_data
-            	.chunks(chunk_size)
-             	.map(|chunk| {
-              		let mut frame_padded = vec![0.0; chunk_size];
-                	frame_padded[0..chunk.len()].copy_from_slice(chunk);
-                   	frame_padded
-              	})
-             	.collect();
+            let frames: Vec<Vec<f32>> = match args {
 
-            if let Some(dsp_func) = dsp_function { 
-                if *use_par_ptr {
-                    frames = frames.par_iter().map(|frame| dsp_func(frame)).collect()
-                } else {
-                    frames = frames.iter().map(|frame| dsp_func(frame)).collect();
+                DspProcessArgs::AudioData(audio_data) => {
+                    get_chunks(audio_data, chunk_size)
+                },
+
+                DspProcessArgs::Closure(dsp_function) => {
+                    let audio_data = dsp_function(); 
+                    get_chunks(audio_data, chunk_size)
+                },
+
+                DspProcessArgs::AudioDataAndClosure(audio_data, dsp_function) => {
+                    let mut f: Vec<Vec<f32>> = get_chunks(audio_data, chunk_size);
+                    if *use_par_ptr {
+                        f = f.par_iter().map(|frame| dsp_function(frame)).collect();
+                    } else {
+                        f = f.iter().map(|frame| dsp_function(frame)).collect();
+                    }
+
+                    f
                 }
-            }
+            };
 
             let m = mclone.lock().unwrap();
             let qclone = Arc::clone(&m.qlist);

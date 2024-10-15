@@ -1,8 +1,5 @@
 #![allow(unused)]
 
-
-
-
 pub struct Sine 
 {
     pub freq: f64,

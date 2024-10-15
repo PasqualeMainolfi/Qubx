@@ -3,6 +3,7 @@ mod qlist;
 mod qubx_components;
 mod qubx_common;
 mod qubx_pmanage;
+mod qubx_types;
 mod qmod {
     pub mod envelopes {
         pub mod qenvelopes;
@@ -13,7 +14,9 @@ mod qmod {
 }
 
 pub use qubx::Qubx;
-pub use qubx_common::StreamParameters;
+pub use qubx_common::{ 
+    StreamParameters, ProcessArg, DspProcessArgs };
 pub use qubx_components::*;
 pub use qmod::envelopes::qenvelopes;
 pub use qmod::signals::qsignals;
+pub use qubx_types::*;

@@ -3,6 +3,7 @@
 use std::thread::JoinHandle;
 use std::default::Default;
 
+
 pub enum QubxExceptions {
     ParamsError,
     FuncArgsError
@@ -91,4 +92,17 @@ impl Process {
     pub fn new(handle: JoinHandle<()>, name: String, state: ProcessState) -> Self {
         Self { handle, name, state }
     }
+}
+
+pub enum DspProcessArgs<T, U>
+{
+    AudioData(Vec<f32>),
+    Closure(T),
+    AudioDataAndClosure(Vec<f32>, U)
+}
+
+pub enum ProcessArg<T>
+{
+    NoArgs,
+    Closure(T),
 }
