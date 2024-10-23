@@ -94,6 +94,7 @@ impl Process {
     }
 }
 
+#[derive(Debug)]
 pub enum DspProcessArgs<T, U>
 {
     AudioData(Vec<f32>),
@@ -101,6 +102,7 @@ pub enum DspProcessArgs<T, U>
     AudioDataAndClosure(Vec<f32>, U)
 }
 
+#[derive(Debug)]
 pub enum ProcessArg<T>
 {
     NoArgs,

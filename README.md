@@ -1,9 +1,15 @@
 # QUBX: A RUST LIBRARY FOR QUEUE-BASED MULTITHREADED REAL-TIME PARALLEL AUDIO STREAMS PROCESSING AND MANAGEMENT
 
 Qubx is a Rust library for managing and processing audio streams in parallel.  
-Related paper: P. Mainolfi, Qubx: a Rust Library for Queue-Based Multithreaded 
+Related paper: P. Mainolfi, Qubx: a Rust Library for Queue-Based Multithreaded
 Real-Time Parallel Audio Streams Processing and Managment, Dafx24, Surrey UK, 2024.  
 
+>**Version 0.2.0**
+
+- Prepare Qubx to activate modules (envelopes, signals, reading and writing buffers)
+- Add qubx type modules
+- Changed the way arguments are passed to the `.start()` function on Matser, Duples and Dsp Process. Now you can use
+`ProcessArg` for Master and Duplex and `DspProcessArgs` for DspProcess
 
 >**Version 0.1.0**
 
@@ -32,7 +38,8 @@ cargo build --release
 Import Qubx and StreamParameters
 
 ```rust
-use qubx::{ Qubx, StreamParameters };
+use qubx::{ Qubx, StreamParameters, ProcessArg, DspProcessArgs, DspClosureNoArgsType, DspClosureWithArgsType, DuplexClosureType, MasterClosureType };
+
 ```
 
 now you can use it.
@@ -56,11 +63,11 @@ q.start_monitoring_active_processe();
 
 // create and starting master out
 let mut master_out = q.create_master_streamout(String::from("M1"), stream_params);
-master_out.start(|frame| {
-    for sample in frame.iter_mut() {
-        *sample *= 0.7;
-    }
+let master_clos: MasterClosureType = Box::new(|frame| {
+    frame.iter_mut().for_each(|sample| { *sample *= 0.7 }) 
 });
+
+master_out.start(ProcessArg::Closure::<MasterClosureType>(master_clos));
 
 // create dsp process and associate it with master out names "M1"
 // deactivate parallel-data (false)
@@ -73,10 +80,12 @@ loop {
     // .
     // ...generates audio_data
 
-    dsp_process1.start(audio_data1, |_audio_data| {
-    	let y = _audio_data.iter().map(|sample| sample * 0.7).collect();
-     	y
+    let dsp_clos: DspClosureWithArgsType = Box::new(|_audio_data| {
+        let y = _audio_data.iter().map(|sample| sample * 0.7).collect();
+        y
     });
+
+    dsp_process1.start(DspProcessArgs::AudioDataAndClosure::<DspClosureNoArgsType, DspClosureWithArgsType>(audio_data1, dsp_clos));
 
     if !run {
         break;

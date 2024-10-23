@@ -1,0 +1,7 @@
+[package]
+name = "signals_test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+qubx = { path = "/Users/pm/AcaHub/Coding/Qubx/QubxRust/qubx" }

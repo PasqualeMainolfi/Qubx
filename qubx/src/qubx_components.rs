@@ -390,7 +390,7 @@ impl DspProcess {
     /// ------
     ///
     /// `args`: can be DspProcessArgs::AudioData (require audio vector only <Vec<f32>>), 
-    /// DspProcessArgs::Closure:::<DspClosureNoArgsType, DspClosureWithArgsType> (pass a closure thare take no arguments and return Vec<f32>) or 
+    /// DspProcessArgs::Closure:::<DspClosureNoArgsType, DspClosureWithArgsType> (pass a closure thare take no arguments and return Vec<f32> as audio data) or 
     /// DspProcessArgs::AudioAndClosure::<DspClosureNoArgsType, DspClosureWithArgsType> (pass audio data as Vec<f32> and closure. 
     /// Closure take one argument &[f32] and return a Vec<f32>).
     ///

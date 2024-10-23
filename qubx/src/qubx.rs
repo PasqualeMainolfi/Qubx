@@ -11,10 +11,11 @@ use crate::qubx_components::{DspProcess, DuplexProcess, MasterStreamoutProcess, 
 use crate::qubx_pmanage::{QubxDspProcess, QubxDuplexProcess, QubxMasterProcess};
 use portaudio as pa;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
+
 
 /// # Qubx: queue-based multithread real time parallel audio streams processing and managment
 ///
@@ -27,8 +28,7 @@ pub struct Qubx {
     pub processes_monitor_ptr: Arc<Mutex<MonitorProcess>>,
     run: Arc<AtomicBool>,
     dsp_latency_amount: Arc<Mutex<Duration>>,
-    // dsp_latency_amount: Arc<Atomi>,
-    count_dsp_iterations: Arc<Mutex<f32>>,
+    count_dsp_iterations: Arc<Mutex<f32>>
 }
 
 impl Qubx {
