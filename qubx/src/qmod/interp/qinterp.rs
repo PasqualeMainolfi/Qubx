@@ -32,19 +32,19 @@ pub enum SignalInterp
 }
 
 impl SignalInterp {
-    /// GET INTERPOLATED VALUE
+    /// Make interpolation
     /// 
     /// # Args
     /// ------
     /// 
-    /// `mu`: interpolation parameter [0, 1]. Relative position between points (t). 
-    /// `buffer`: previous samples. For Linear and Cosine must be length of 2;
+    /// `mu`: interpolation parameter [0, 1]. Relative position between points (t)   
+    /// `buffer`: previous samples. For Linear and Cosine must be length of 2 
     /// for Cubic and Hermite must be length of 4; for NoInterp must be 1.
     /// 
     /// # Return
     /// --------
     /// 
-    /// Result<f32, InterpError>
+    /// `Result<f32, InterpError>`
     /// 
     pub fn get_table_interpolation(&self, mu: f32, buffer: &[f32]) -> Result<f32, InterpError> {
         match buffer.len() {

@@ -12,11 +12,14 @@ mod qmod {
         pub mod qsignals;
         pub mod qsignal_tools;
     }
-    pub mod buffers {
-        pub mod qbuffers;
-    }
+    // pub mod buffers {
+    //     pub mod qbuffers;
+    // }
     pub mod interp {
         pub mod qinterp;
+    }
+    pub mod convolution {
+        pub mod qconvolution;
     }
 }
 
@@ -31,3 +34,4 @@ pub use qmod::buffers::qbuffers;
 pub use qubx_types::*;
 pub use qmod::signals::qsignal_tools::SignalParams;
 pub use qmod::interp::qinterp;
+pub use qmod::convolution::qconvolution;

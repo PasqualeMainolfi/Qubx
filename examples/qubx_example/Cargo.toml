@@ -1,0 +1,9 @@
+[package]
+name = "qubx_examples"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+qubx ={ path = "/Users/pm/AcaHub/Coding/Qubx/QubxRust/qubx" }
+rand = "0.8.5"
+wav_io = "0.1.14"

@@ -38,7 +38,7 @@ enum TestMode {
     Output,
 }
 
-fn main() {
+fn simple_example() {
 	println!("[INFO] FRAME LENGTH: {}", CHUNK);
     let mode = TestMode::Output;
 

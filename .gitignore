@@ -1,9 +1,7 @@
 /testing_code
 /paper
 /qubx/target
-/examples/simple_test/target
-/examples/envelope_test/target
-/examples/signals_test/target
+/examples/qubx_example/target
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

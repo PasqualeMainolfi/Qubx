@@ -1,6 +1,7 @@
 #![allow(unused)]
 
-use super::qsignal_tools::{ build_signal, build_signal_no_table, build_table, get_oscillator_phase, get_phase_motion, SignalParams, WaveTable };
+use super::qsignal_tools::{ build_signal, build_signal_no_table, build_table, 
+    get_oscillator_phase, get_phase_motion, SignalParams, WaveTable, SignalError };
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy)]
@@ -25,7 +26,7 @@ pub struct QSignal
 
 impl QSignal
 {
-    /// CREATE NEW QSIGNAL
+    /// Qsignal obj
     /// 
     /// # Args
     /// -----
@@ -41,69 +42,70 @@ impl QSignal
         Self { n_points: table_length, sine, saw, triangle, square }
     }
 
-    /// GENERATE SIGNAL TO VEC
-    /// 
-    /// Generate signal as a vector
+    /// Generate simple signal as a vector
     /// 
     /// # Args
     /// -----
     /// 
-    /// `signal_params`: signal parameters (see `SignalParams`)
+    /// `signal_params`: signal parameters (see `SignalParams`)  
+    /// `duration`: signal duration in seconds
     /// 
     /// # Return
     /// --------
     /// 
-    /// Vec<f32>
+    /// `Result<Vec<f32>, SignalError>`
     /// 
-    pub fn signal_to_vec(&mut self, signal_params: &mut SignalParams) -> Vec<f32> {
+    pub fn signal_to_vec(&mut self, signal_params: &mut SignalParams, duration: f32) -> Result<Vec<f32>, SignalError> {
         match signal_params.mode {
-            SignalMode::Sine => build_signal(&self.sine, signal_params),
-            SignalMode::Saw => build_signal(&self.saw, signal_params),
-            SignalMode::Triangle => build_signal(&self.triangle, signal_params),
-            SignalMode::Square => build_signal(&self.square, signal_params),
-            SignalMode::Phasor => build_signal_no_table(signal_params),
-            SignalMode::Pulse(_) => build_signal_no_table(signal_params)
+            SignalMode::Sine => Ok(build_signal(&self.sine, signal_params, duration)),
+            SignalMode::Saw => Ok(build_signal(&self.saw, signal_params, duration)),
+            SignalMode::Triangle => Ok(build_signal(&self.triangle, signal_params, duration)),
+            SignalMode::Square => Ok(build_signal(&self.square, signal_params, duration)),
+            SignalMode::Phasor => build_signal_no_table(signal_params, duration),
+            SignalMode::Pulse(_) => build_signal_no_table(signal_params, duration)
         }
     }
 
-    /// GENERATE PHASE VALUE
-    /// Generate phase value with no table look-up
+    /// Generate procedural phase value (no table-lookup)
     /// 
     /// # Args
     /// -----
     /// 
-    /// `phase`: 
     /// `signal_params`: signal parameters (see `SignalParams`)
     /// 
     /// # Return
     /// --------
     /// 
-    /// f32 
+    /// `f32` 
     /// 
     pub fn procedural_oscillator(&self, signal_params: &mut SignalParams) -> f32 {
         get_phase_motion(signal_params)
     }
 
-    /// TABLE LOOK-UP OSCILLATOR
-    /// Generate phase motion using table look-up oscillator
+    /// Table-lookup oscillator
     /// 
     /// # Args
     /// -----
     /// 
     /// `signal_params`: signal parameters (`SignalParams`)
     /// 
-    pub fn table_lookup_oscillator(&self, signal_params: &mut SignalParams) -> f32 {
+    /// # Return 
+    /// --------
+    /// 
+    /// Result<f32, SignalError>
+    /// 
+    pub fn table_lookup_oscillator(&self, signal_params: &mut SignalParams) -> Result<f32, SignalError> {
         let table: &WaveTable = match signal_params.mode {
             SignalMode::Sine => &self.sine,
             SignalMode::Saw => &self.saw,
             SignalMode::Triangle => &self.triangle,
             SignalMode::Square => &self.square,
             _ => {
-                eprintln!("[ERROR] For Phasor and Pulse use procedural_oscillator()");
-                std::process::exit(1)
+                return Err(SignalError::SignalModeNotAllowedInProceduralOscillator)
             } 
         };
-        get_oscillator_phase(table, signal_params)
+        let sample = get_oscillator_phase(table, signal_params);
+        Ok(sample)
     }
 
 }

@@ -5,15 +5,27 @@ use crate::qinterp::SignalInterp;
 
 const TWOPI: f32 = 2.0 * std::f32::consts::PI;
 
+#[derive(Debug, Clone, Copy)]
+pub enum SignalError
+{
+    SignalModeNotAllowed,
+    SignalModeNotAllowedInProceduralOscillator
+}
+
 pub struct WaveTable
 {
     pub table: Vec<f32>,
     pub table_length: f32
 }
 
-/// SIGNAL PARAMETERS
+/// Signal Parameters
 /// 
-/// `mode`: type of signal (see `SignalMode`)
+/// `mode`: type of signal (see `SignalMode`)  
+/// `interp`: interpolation type (see `SignalInterp`)  
+/// `freq`: frequency value in Hz  
+/// `amp`: amplitude value  
+/// `phase_offset`: start phase value in range [0, 1]
+/// `sr`: sample rate in Hz  
 /// 
 pub struct SignalParams
 {
@@ -22,7 +34,6 @@ pub struct SignalParams
     pub freq: f32,
     pub amp: f32,
     pub phase_offset: f32,
-    pub dur: f32,
     pub sr: f32,
     phase_motion: f32,
     interp_buffer: Vec<f32>
@@ -30,14 +41,13 @@ pub struct SignalParams
 
 impl SignalParams 
 {
-    pub fn new(mode: SignalMode, interp: SignalInterp, freq: f32, amp: f32, phase_offset: f32, dur: f32, sr: f32) -> Self {
+    pub fn new(mode: SignalMode, interp: SignalInterp, freq: f32, amp: f32, phase_offset: f32, sr: f32) -> Self {
         Self {
             mode,
             interp,
             freq,
             amp,
             phase_offset,
-            dur,
             sr,
             phase_motion: 0.0,
             interp_buffer: Vec::new(),
@@ -97,7 +107,6 @@ impl Default for SignalParams
             freq: 440.0,
             amp: 1.0,
             phase_offset: 0.0,
-            dur: 1.0,
             sr: 44100.0,
             phase_motion: 0.0,
             interp_buffer: Vec::new(),
@@ -134,25 +143,25 @@ pub fn get_oscillator_phase(wave_table: &WaveTable, signal_params: &mut SignalPa
     signal_params.amp * sample
 }
 
-pub fn build_signal(wave_table: &WaveTable, signal_params: &mut SignalParams) -> Vec<f32> {
-    let n_samples = (signal_params.dur * signal_params.sr) as usize;
+pub fn build_signal(wave_table: &WaveTable, signal_params: &mut SignalParams, duration: f32) -> Vec<f32> {
+
+    let n_samples = (duration * signal_params.sr) as usize;
     (0..n_samples).map(|_| get_oscillator_phase(wave_table, signal_params)).collect::<Vec<f32>>()
 }
 
-pub fn build_signal_no_table(signal_params: &mut SignalParams) -> Vec<f32> {
-    let n_samples = (signal_params.dur * signal_params.sr) as usize;
-    (0..n_samples)
-        .map(|_| {
-            match signal_params.mode {
-                SignalMode::Phasor => get_phase_motion(signal_params),
-                SignalMode::Pulse(_) => get_phase_motion(signal_params),
-                _ => {
-                    eprintln!("[ERROR] Not allowed!");
-                    std::process::exit(1)
-                }
+pub fn build_signal_no_table(signal_params: &mut SignalParams, duration: f32) -> Result<Vec<f32>, SignalError> {
+    let n_samples = (duration * signal_params.sr) as usize;
+    let mut sig: Vec<f32> = Vec::new();
+    for value in sig.iter_mut() {
+        *value = match signal_params.mode {
+            SignalMode::Phasor => get_phase_motion(signal_params),
+            SignalMode::Pulse(_) => get_phase_motion(signal_params),
+            _ => {
+               return Err(SignalError::SignalModeNotAllowed)
             }
-        })
-        .collect::<Vec<f32>>()
+        }
+    }
+    Ok(sig)
 }
 
 pub fn build_table(mode: SignalMode, table_length: f32) -> WaveTable {

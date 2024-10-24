@@ -6,8 +6,12 @@ Real-Time Parallel Audio Streams Processing and Managment, Dafx24, Surrey UK, 20
 
 >**Version 0.2.0**
 
-- Prepare Qubx to activate modules (envelopes, signals, reading and writing buffers)
-- Add qubx type modules
+- Prepare Qubx to receive modules
+- New! Add signals module. This module allow you to generate raw signals (Sine, Saw, Triangle, Square, Phasor, Pulse)
+- New! Add envelopes module. This module allow you to create and generate envelope shapes
+- New! Add interp module. This module allow you to implement Linear, Cubic and Hermite interpolation
+- New! Add convolution module. This methos allow you to use inside, outside and fft convolution
+- Add qubx types module
 - Changed the way arguments are passed to the `.start()` function on Matser, Duples and Dsp Process. Now you can use
 `ProcessArg` for Master and Duplex and `DspProcessArgs` for DspProcess
 

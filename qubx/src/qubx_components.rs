@@ -58,7 +58,7 @@ impl MasterStreamoutProcess {
     /// # Args
     /// ------
     ///
-    /// `arg`: can be ProcessArg::NoArgs (means take no argumets) or ProcessArg::Closure::<MasterClosureType>(closure).
+    /// `arg`: can be `ProcessArg::NoArgs` (means take no argumets) or `ProcessArg::Closure::<MasterClosureType>(closure)`.
     /// Closure that processes the summation of audio streams from all processes associated with the stream output. Take one arg
     /// `frame`: `&mut [f32]` (frame to be processed)
     ///
@@ -70,7 +70,6 @@ impl MasterStreamoutProcess {
     ///    frame.iter_mut().for_each(|sample| { *sample *= 0.7 }) 
     /// });
     /// master_out.start(ProcessArg::Closure::<MasterClosureType>(master_clos));
-    /// });
     /// ```
     ///
     /// # Return
@@ -215,7 +214,7 @@ impl DuplexProcess {
     /// # Args
     /// ------
     ///
-    /// `arg`: can be ProcessArg::NoArgs (means take no argumets) or ProcessArg::Closure::<DuplexClosureType>(closure).  
+    /// `arg`: can be `ProcessArg::NoArgs` (means take no argumets) or `ProcessArg::Closure::<DuplexClosureType>(closure)`.  
     /// Closure that processes the audio streams. Take one arg frame: `&[f32]` (frame to be processed) and must be return
     /// a `Vec<f32>` (frame to output)
     ///
@@ -389,10 +388,10 @@ impl DspProcess {
     /// # Args
     /// ------
     ///
-    /// `args`: can be DspProcessArgs::AudioData (require audio vector only <Vec<f32>>), 
-    /// DspProcessArgs::Closure:::<DspClosureNoArgsType, DspClosureWithArgsType> (pass a closure thare take no arguments and return Vec<f32> as audio data) or 
-    /// DspProcessArgs::AudioAndClosure::<DspClosureNoArgsType, DspClosureWithArgsType> (pass audio data as Vec<f32> and closure. 
-    /// Closure take one argument &[f32] and return a Vec<f32>).
+    /// `args`: can be DspProcessArgs::AudioData (require audio vector only `Vec<f32>`), 
+    /// DspProcessArgs::Closure:::<DspClosureNoArgsType, DspClosureWithArgsType> (pass a closure thare take no arguments and return `Vec<f32>` as audio data) or 
+    /// DspProcessArgs::AudioAndClosure::<DspClosureNoArgsType, DspClosureWithArgsType> (pass audio data as `Vec<f32>` and closure. 
+    /// Closure take one argument `&[f32]` and return a `Vec<f32>`).
     ///
     /// Example:
     /// ```rust
