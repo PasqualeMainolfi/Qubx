@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use super::qsignals::SignalMode;
+use std::collections::HashMap;
 use crate::qinterp::SignalInterp;
 
 const TWOPI: f32 = 2.0 * std::f32::consts::PI;
@@ -14,8 +14,34 @@ pub enum SignalError
 
 pub struct WaveTable
 {
-    pub table: Vec<f32>,
-    pub table_length: f32
+    table: Vec<f32>,
+    table_length: f32
+}
+
+/// Signal Parameters
+/// 
+/// `mode`: type of signal (see `SignalMode`)  
+/// `interp`: interpolation type (see `SignalInterp`)  
+/// `freq`: frequency value in Hz  
+/// `amp`: amplitude value  
+/// `phase_offset`: start phase value in range [0, 1]
+/// `sr`: sample rate in Hz  
+/// 
+
+struct PhaseInterpolationIndex
+{
+    int_part: usize,
+    frac_part: f32
+}
+
+impl PhaseInterpolationIndex
+{
+    fn new(index: f32) -> Self {
+        let mut ip = index as i32;
+        ip = if ip < 0 { 0 } else { ip };
+        let frac_part = index.fract();
+        Self { int_part: ip as usize, frac_part }
+    }
 }
 
 /// Signal Parameters
@@ -80,23 +106,6 @@ impl SignalParams
     }
 }
 
-struct PhaseInterpolationIndex
-{
-    int_part: usize,
-    frac_part: f32
-}
-
-impl PhaseInterpolationIndex
-{
-    fn new(index: f32) -> Self {
-        let mut ip = index as i32;
-        ip = if ip < 0 { 0 } else { ip };
-        let frac_part = index.fract();
-        Self { int_part: ip as usize, frac_part }
-    }
-}
-
-
 impl Default for SignalParams
 {
     fn default() -> Self {
@@ -114,7 +123,126 @@ impl Default for SignalParams
     }
 }
 
-pub fn get_phase_motion(signal_params: &mut SignalParams) -> f32 {
+#[derive(Debug, Clone, Copy)]
+pub enum SignalMode
+{
+    Sine,
+    Saw,
+    Triangle,
+    Square,
+    Phasor,
+    Pulse(f32)
+}
+
+pub struct QSignal
+{
+    n_points: usize,
+    sine: WaveTable,
+    saw: WaveTable,
+    triangle: WaveTable,
+    square: WaveTable
+}
+
+impl QSignal
+{
+    /// Qsignal obj
+    /// 
+    /// # Args
+    /// -----
+    /// 
+    /// `table_length`: wave table oscillator length
+    /// 
+    pub fn new(table_length: usize) -> Self {
+        let sine = build_table(SignalMode::Sine, table_length as f32);
+        let saw = build_table(SignalMode::Saw, table_length as f32);        
+        let triangle = build_table(SignalMode::Triangle, table_length as f32);
+        let square = build_table(SignalMode::Square, table_length as f32);
+
+        Self { n_points: table_length, sine, saw, triangle, square }
+    }
+
+    /// Generate simple signal as a vector
+    /// 
+    /// # Args
+    /// -----
+    /// 
+    /// `signal_params`: signal parameters (see `SignalParams`)  
+    /// `duration`: signal duration in seconds
+    /// 
+    /// # Return
+    /// --------
+    /// 
+    /// `Result<Vec<f32>, SignalError>`
+    /// 
+    pub fn signal_to_vec(&mut self, signal_params: &mut SignalParams, duration: f32) -> Result<Vec<f32>, SignalError> {
+        match signal_params.mode {
+            SignalMode::Sine => Ok(build_signal(&self.sine, signal_params, duration)),
+            SignalMode::Saw => Ok(build_signal(&self.saw, signal_params, duration)),
+            SignalMode::Triangle => Ok(build_signal(&self.triangle, signal_params, duration)),
+            SignalMode::Square => Ok(build_signal(&self.square, signal_params, duration)),
+            SignalMode::Phasor => build_signal_no_table(signal_params, duration),
+            SignalMode::Pulse(_) => build_signal_no_table(signal_params, duration)
+        }
+    }
+
+    /// Generate procedural phase value (no table-lookup)
+    /// 
+    /// # Args
+    /// -----
+    /// 
+    /// `signal_params`: signal parameters (see `SignalParams`)
+    /// 
+    /// # Return
+    /// --------
+    /// 
+    /// `f32` 
+    /// 
+    pub fn procedural_oscillator(&self, signal_params: &mut SignalParams) -> f32 {
+        get_phase_motion(signal_params)
+    }
+
+    /// Table-lookup oscillator
+    /// 
+    /// # Args
+    /// -----
+    /// 
+    /// `signal_params`: signal parameters (`SignalParams`)
+    /// 
+    /// # Return 
+    /// --------
+    /// 
+    /// Result<f32, SignalError>
+    /// 
+    pub fn table_lookup_oscillator(&self, signal_params: &mut SignalParams) -> Result<f32, SignalError> {
+        let table: &WaveTable = match signal_params.mode {
+            SignalMode::Sine => &self.sine,
+            SignalMode::Saw => &self.saw,
+            SignalMode::Triangle => &self.triangle,
+            SignalMode::Square => &self.square,
+            _ => {
+                return Err(SignalError::SignalModeNotAllowedInProceduralOscillator)
+            } 
+        };
+        let sample = get_oscillator_phase(table, signal_params);
+        Ok(sample)
+    }
+
+}
+
+impl Default for QSignal
+{
+    fn default() -> Self {
+        let table_length: usize = 4096;
+        let sine = build_table(SignalMode::Sine, table_length as f32);
+        let saw = build_table(SignalMode::Saw, table_length as f32);        
+        let triangle = build_table(SignalMode::Triangle, table_length as f32);
+        let square = build_table(SignalMode::Square, table_length as f32);
+
+        Self { n_points: table_length, sine, saw, triangle, square }
+    }
+}
+
+fn get_phase_motion(signal_params: &mut SignalParams) -> f32 {
     let phase = signal_params.freq * signal_params.phase_motion / signal_params.sr;
     let sample = match signal_params.mode {
         SignalMode::Sine => (TWOPI * phase).sin(),
@@ -129,7 +257,7 @@ pub fn get_phase_motion(signal_params: &mut SignalParams) -> f32 {
     sample * signal_params.amp
 }
 
-pub fn get_oscillator_phase(wave_table: &WaveTable, signal_params: &mut SignalParams) -> f32 {
+fn get_oscillator_phase(wave_table: &WaveTable, signal_params: &mut SignalParams) -> f32 {
     let si = signal_params.freq / signal_params.sr * wave_table.table_length;
     let phase_offset = signal_params.phase_offset * wave_table.table_length;
     let phase_index = (signal_params.phase_motion + phase_offset) % wave_table.table_length;
@@ -143,13 +271,13 @@ pub fn get_oscillator_phase(wave_table: &WaveTable, signal_params: &mut SignalPa
     signal_params.amp * sample
 }
 
-pub fn build_signal(wave_table: &WaveTable, signal_params: &mut SignalParams, duration: f32) -> Vec<f32> {
+fn build_signal(wave_table: &WaveTable, signal_params: &mut SignalParams, duration: f32) -> Vec<f32> {
 
     let n_samples = (duration * signal_params.sr) as usize;
     (0..n_samples).map(|_| get_oscillator_phase(wave_table, signal_params)).collect::<Vec<f32>>()
 }
 
-pub fn build_signal_no_table(signal_params: &mut SignalParams, duration: f32) -> Result<Vec<f32>, SignalError> {
+fn build_signal_no_table(signal_params: &mut SignalParams, duration: f32) -> Result<Vec<f32>, SignalError> {
     let n_samples = (duration * signal_params.sr) as usize;
     let mut sig: Vec<f32> = Vec::new();
     for value in sig.iter_mut() {
@@ -164,7 +292,7 @@ pub fn build_signal_no_table(signal_params: &mut SignalParams, duration: f32) ->
     Ok(sig)
 }
 
-pub fn build_table(mode: SignalMode, table_length: f32) -> WaveTable {
+fn build_table(mode: SignalMode, table_length: f32) -> WaveTable {
     let mut table_signal = SignalParams { mode, freq: 1.0, sr: table_length, ..Default::default() };
     let mut table: Vec<f32> = vec![0.0; table_length as usize];
     for value in table.iter_mut() {

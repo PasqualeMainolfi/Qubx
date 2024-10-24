@@ -1,6 +1,5 @@
-use qubx::qsignals::{ SignalMode, QSignal };
+use qubx::qsignals::{ SignalMode, QSignal, SignalParams };
 use qubx::qinterp::SignalInterp;
-use qubx::SignalParams;
 
 const SR: f32 = 16.0;
 
@@ -12,14 +11,14 @@ pub fn signals_example() {
         println!("SAMPLE {i}: {sample}");
     }
 
-    let svec = signal.signal_to_vec(&mut params, 1.0);
+    let svec = signal.signal_to_vec(&mut params, 1.0).unwrap();
     println!("{:?}", svec);
 
     let mut paramsc = SignalParams::new(SignalMode::Sine, SignalInterp::Cubic, 2.5, 1.0, 0.0, SR);
-    let svec = signal.signal_to_vec(&mut paramsc, 1.0);
+    let svec = signal.signal_to_vec(&mut paramsc, 1.0).unwrap();
     println!("CUBIC: {:?}", svec);
     
     let mut paramsh = SignalParams::new(SignalMode::Sine, SignalInterp::Hermite, 2.5, 1.0, 0.0, SR);
-    let svec = signal.signal_to_vec(&mut paramsh, 1.0);
+    let svec = signal.signal_to_vec(&mut paramsh, 1.0).unwrap();
     println!("HERMITE: {:?}", svec);
 }
