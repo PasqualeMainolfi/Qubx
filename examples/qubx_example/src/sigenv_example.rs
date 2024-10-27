@@ -3,12 +3,13 @@ use qubx::{
     StreamParameters, 
     ProcessArg, 
     DspProcessArgs, 
-    DspClosureNoArgsType, 
-    DspClosureWithArgsType, 
-    MasterClosureType,
+    DspCAType,
+    DspCNAType, 
+    MasterCType,
     qinterp::SignalInterp,
-    qsignals::{ QSignal, SignalMode, SignalParams },
-    qenvelopes::{ QEnvelope, EnvParams, EnvMode }
+    qsignals::{ QSignal, SignalMode, SignalParams, ComplexSignalParams },
+    qenvelopes::{ QEnvelope, EnvParams, EnvMode },
+    qoperations::envelope_to_signal
 };
 
 const SR: i32 = 44100;
@@ -28,36 +29,46 @@ pub fn sigenv_example() {
     q.start_monitoring_active_processes();
     
     let mut master_out = q.create_master_streamout(String::from("M1"), stream_params);
-    let master_clos: MasterClosureType = Box::new(|frame| {
+    let master_clos: MasterCType = Box::new(|frame| {
         frame.iter_mut().for_each(|sample| { *sample *= 0.7 }) 
     });
-    master_out.start(ProcessArg::Closure::<MasterClosureType>(master_clos));
+    master_out.start(ProcessArg::Closure(master_clos));
 
     let mut dsp_process = q.create_parallel_dsp_process(String::from("M1"), true);
 
     let duration = 1.1;
 
-    let mut sine_params = SignalParams::new(SignalMode::Sine, SignalInterp::Linear, 440.0, 0.7, 0.0, SR as f32);
     let mut sine = QSignal::new(SR as usize);
-    let sine_vec = sine.signal_to_vec(&mut sine_params, duration).unwrap();
+	let mut exp_env = QEnvelope::new(SR as f32);
+    
+    let mut sine_params = SignalParams::new(SignalMode::Sine, SignalInterp::Cubic, 440.0, 0.7, 0.0, SR as f32);
+    let signal_sine = sine.into_signal_object(&mut sine_params, duration);
+    
+    let mut comp_params = ComplexSignalParams::new([440.0, 880.0, 1320.0].to_vec(), [0.7, 0.5, 0.3].to_vec(), None, SR as f32);
+    let signal_comp = sine.into_signal_object(&mut comp_params, duration);
 
     let env_points = vec![0.001, 0.1, 1.0, duration - 0.1, 0.001];
     let exponential_env_params = EnvParams { shape: env_points, mode: EnvMode::Exponential };
-	let mut exp_env = QEnvelope::new(SR as f32);
-    let env_shape = exp_env.envelope_to_vec(&exponential_env_params);
+    let env_shape = exp_env.into_envelope_object(&exponential_env_params);
 
-    let dsp_clos: DspClosureNoArgsType = Box::new(move || {
-        let y = sine_vec
-            .iter()
-            .zip(env_shape.iter())
-            .map(|(&x, &e)| x * e)
-            .collect::<Vec<f32>>();
-        y
-    });
+    // let dsp_clos: DspClosureNoArgsType = Box::new(move || {
+    //     let y = sine_vec
+    //         .iter()
+    //         .zip(env_shape.iter())
+    //         .map(|(&x, &e)| x * e)
+    //         .collect::<Vec<f32>>();
+    //     y
+    // });
+    // dsp_process.start(DspProcessArgs::Closure::<DspCNAType, DspCAType>(dsp_clos));
 
-    dsp_process.start(DspProcessArgs::Closure::<DspClosureNoArgsType, DspClosureWithArgsType>(dsp_clos));
-
+    let enveloped_sine_signal = envelope_to_signal(&signal_sine, &env_shape).unwrap();
+    dsp_process.start(DspProcessArgs::AudioData::<DspCNAType, DspCAType>(enveloped_sine_signal.vector_signal));
     std::thread::sleep(std::time::Duration::from_secs_f32(1.5));
+
+    let enveloped_comp_signal = envelope_to_signal(&signal_comp, &env_shape).unwrap();
+    dsp_process.start(DspProcessArgs::AudioData::<DspCNAType, DspCAType>(enveloped_comp_signal.vector_signal));
+    std::thread::sleep(std::time::Duration::from_secs_f32(1.5));
+    
 
     q.close_qubx();
 }

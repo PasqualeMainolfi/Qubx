@@ -4,12 +4,16 @@ use core::fmt;
 use std::time::Duration;
 use std::collections::HashMap;
 use std::fmt::Display;
+use crate::qubx_common::{ Channels, ChannelError };
+use crate::qoperations::split_into_nchannels;
 
+#[derive(Debug, Clone, Copy)]
 pub enum EnvelopeError
 {
 	EnvPointsError,
 	EnvExponetialZeroValue,
-	EnvLengthExceeded
+	EnvLengthExceeded,
+	EnvToSignalErrorDifferentChannelNumbers
 }
 
 impl fmt::Display for EnvelopeError {
@@ -18,6 +22,7 @@ impl fmt::Display for EnvelopeError {
 			Self::EnvExponetialZeroValue => write!(f, "<EnvExponentialZeroValue>"),
 			Self::EnvPointsError => write!(f, "<EnvPointsError>"),
 			Self::EnvLengthExceeded => write!(f, "<EnvLengthExceeded>"),
+			Self::EnvToSignalErrorDifferentChannelNumbers => write!(f, "<EnvToSignalErrorDifferentChannelNumbers>")
 		}
 	}
 }
@@ -36,6 +41,21 @@ impl fmt::Display for EnvMode
 			Self::Linear => write!(f, "Linear"),
 			Self::Exponential => write!(f, "Exponential")
 		}
+	}
+}
+
+pub struct EnvelopeObject
+{
+	pub vector_envelope: Vec<f32>,
+	pub n_channels: usize
+}
+
+impl Channels for EnvelopeObject
+{
+	fn to_nchannels(&mut self, out_channels: usize) -> Result<(), ChannelError> {
+		let prev_channels = self.n_channels;
+        self.n_channels = out_channels;
+        split_into_nchannels(&mut self.vector_envelope, prev_channels, out_channels)
 	}
 }
 
@@ -165,10 +185,10 @@ impl QEnvelope
 	/// # Return
 	/// --------
 	/// 
-	/// `Vec<f32>`
+	/// `EnvelopeObject`
 	/// 
 	/// 
-	pub fn envelope_to_vec(&mut self, env_params: &EnvParams) -> Vec<f32> {
+	pub fn into_envelope_object(&mut self, env_params: &EnvParams) -> EnvelopeObject {
 		let mut env = Vec::new();
 		loop {
 			match self.advance_envelope(env_params, true) {
@@ -184,7 +204,7 @@ impl QEnvelope
 				}
 			}
 		}
-		env
+		EnvelopeObject { vector_envelope: env, n_channels: 1 }
 	}
 
 	/// Generate ADSR shape to vec
@@ -198,11 +218,11 @@ impl QEnvelope
 	/// # Return
 	/// --------
 	/// 
-	/// `Vec<f32>`
+	/// `EnvelopeObject`
 	/// 
-	pub fn adsr_to_vec(&mut self, adsr_params: &AdsrParams) -> Vec<f32>{ 
+	pub fn adsr_to_envelope_object(&mut self, adsr_params: &AdsrParams) -> EnvelopeObject { 
 		let env_params = adsr_params.get_env_params();
-		self.envelope_to_vec(&env_params)
+		self.into_envelope_object(&env_params)
 	}
 
 	/// Generate ADSR sample by sample
@@ -219,7 +239,7 @@ impl QEnvelope
 	/// # Return
 	/// --------
 	/// 
-	/// `Vec<f32>`
+	/// `Result<f32, EnvelopeError>`
 	///
 	pub fn advance_adsr(&mut self, adsr_params: &AdsrParams, length_exceeded: bool) -> Result<f32, EnvelopeError> {
 		let env_params = adsr_params.get_env_params();

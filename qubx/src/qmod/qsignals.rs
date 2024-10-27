@@ -2,6 +2,9 @@
 
 use std::collections::HashMap;
 use crate::qinterp::SignalInterp;
+use crate::qubx_common::{ Channels, ChannelError };
+use crate::qoperations::split_into_nchannels;
+use crate::qubx_common::SignalOperation;
 
 const TWOPI: f32 = 2.0 * std::f32::consts::PI;
 
@@ -12,6 +15,7 @@ pub enum SignalError
     SignalModeNotAllowedInProceduralOscillator
 }
 
+#[derive(Debug, Clone)]
 pub struct WaveTable
 {
     table: Vec<f32>,
@@ -44,6 +48,68 @@ impl PhaseInterpolationIndex
     }
 }
 
+/// Signal Component
+/// 
+/// `freqs`: frequency values in Hz for each component  
+/// `amps`: amplitude values for each component  
+/// `phase_offsets`: start phases value in range [0, 1] for each components.
+/// 
+#[derive(Debug, Clone)]
+pub struct ComplexSignalParams 
+{
+    pub freqs: Vec<f32>,
+    pub amps: Vec<f32>,
+    pub phase_offsets: Vec<f32>,
+    pub sr: f32,
+    phase_motion: f32,
+    mode: SignalMode
+}
+
+impl ComplexSignalParams 
+{
+    /// Oscillator Bank
+    /// 
+    /// `freqs`: frequency values in Hz for each component  
+    /// `amps`: amplitude values for each component  
+    /// `phase_offsets`: start phases value in range [0, 1] for each components. if None sets all to 0.0  
+    /// 
+    pub fn new(freqs: Vec<f32>, amps: Vec<f32>, phase_offsets: Option<Vec<f32>>, sr: f32) -> Self {
+        let n = freqs.len();
+        let start_phases = match phase_offsets {
+            Some(phases) => phases,
+            None => vec![0.0; n],
+        };
+        Self { freqs, amps, phase_offsets: start_phases, phase_motion: 0.0, sr, mode: SignalMode::ComplexSignal }
+    }
+}
+
+impl SignalOperation for ComplexSignalParams
+{
+    fn proc_oscillator(&mut self) -> f32 {
+        let n = self.freqs.len();
+        let sample = self.freqs
+            .iter()
+            .zip(self.amps.iter()
+                .zip(self.phase_offsets.iter()
+                )
+            )
+            .map(|(f, (a, p))| a * ((TWOPI * f * self.phase_motion / self.sr) + p).sin())
+            .sum();
+        self.phase_motion += 1.0;
+        sample
+    }
+
+    fn to_signal_object(&mut self, wave_table: Option<WaveTable>, duration: f32) -> SignalObject {
+        let signal_length = self.sr * duration;
+        let vector_signal = (0..signal_length as usize).map(|_| self.proc_oscillator()).collect::<Vec<f32>>();
+        SignalObject { vector_signal, n_channels: 1 }
+    }
+
+    fn get_mode(&self) -> SignalMode {
+        SignalMode::ComplexSignal
+    }
+}
+
 /// Signal Parameters
 /// 
 /// `mode`: type of signal (see `SignalMode`)  
@@ -65,8 +131,11 @@ pub struct SignalParams
     interp_buffer: Vec<f32>
 }
 
-impl SignalParams 
+impl SignalParams
 {
+    /// Create new signal params
+    /// 
+    /// 
     pub fn new(mode: SignalMode, interp: SignalInterp, freq: f32, amp: f32, phase_offset: f32, sr: f32) -> Self {
         Self {
             mode,
@@ -106,10 +175,36 @@ impl SignalParams
     }
 }
 
+impl SignalOperation for SignalParams
+{
+    fn proc_oscillator(&mut self) -> f32 {
+        let sample = get_phase_motion(self.phase_motion, self.freq, self.amp, self.phase_offset, self.sr, &self.mode);
+        self.update_pmotion(1.0);
+        sample.unwrap()
+    }
+
+    fn to_signal_object(&mut self, wave_table: Option<WaveTable>, duration: f32) -> SignalObject {
+        let sig = match self.mode {
+            SignalMode::Phasor | SignalMode::Pulse(_) => build_signal_no_table(self, duration).unwrap(),
+            _ => {
+                match wave_table {
+                    Some(table) => build_signal(&table, self, duration),
+                    None => { Vec::new() }
+                }
+            }
+        };
+        SignalObject { vector_signal: sig, n_channels: 1 }
+    }
+
+    fn get_mode(&self) -> SignalMode {
+        self.mode
+    }
+
+}
+
 impl Default for SignalParams
 {
     fn default() -> Self {
-        
         Self {
             mode: SignalMode::Sine,
             interp: SignalInterp::NoInterp,
@@ -118,8 +213,23 @@ impl Default for SignalParams
             phase_offset: 0.0,
             sr: 44100.0,
             phase_motion: 0.0,
-            interp_buffer: Vec::new(),
+            interp_buffer: Vec::new()
         }
+    }
+}
+
+pub struct SignalObject
+{
+   pub vector_signal: Vec<f32>,
+   pub n_channels: usize,
+}
+
+impl Channels for SignalObject
+{
+    fn to_nchannels(&mut self, out_channels: usize) -> Result<(), ChannelError> {
+        let prev_channels = self.n_channels;
+        self.n_channels = out_channels;
+        split_into_nchannels(&mut self.vector_signal, prev_channels, out_channels)
     }
 }
 
@@ -131,7 +241,8 @@ pub enum SignalMode
     Triangle,
     Square,
     Phasor,
-    Pulse(f32)
+    Pulse(f32),
+    ComplexSignal
 }
 
 pub struct QSignal
@@ -157,7 +268,6 @@ impl QSignal
         let saw = build_table(SignalMode::Saw, table_length as f32);        
         let triangle = build_table(SignalMode::Triangle, table_length as f32);
         let square = build_table(SignalMode::Square, table_length as f32);
-
         Self { n_points: table_length, sine, saw, triangle, square }
     }
 
@@ -172,16 +282,15 @@ impl QSignal
     /// # Return
     /// --------
     /// 
-    /// `Result<Vec<f32>, SignalError>`
+    /// `SignalObject`
     /// 
-    pub fn signal_to_vec(&mut self, signal_params: &mut SignalParams, duration: f32) -> Result<Vec<f32>, SignalError> {
-        match signal_params.mode {
-            SignalMode::Sine => Ok(build_signal(&self.sine, signal_params, duration)),
-            SignalMode::Saw => Ok(build_signal(&self.saw, signal_params, duration)),
-            SignalMode::Triangle => Ok(build_signal(&self.triangle, signal_params, duration)),
-            SignalMode::Square => Ok(build_signal(&self.square, signal_params, duration)),
-            SignalMode::Phasor => build_signal_no_table(signal_params, duration),
-            SignalMode::Pulse(_) => build_signal_no_table(signal_params, duration)
+    pub fn into_signal_object<T: SignalOperation>(&self, signal_params: &mut T, duration: f32) -> SignalObject {
+        match signal_params.get_mode() {
+            SignalMode::ComplexSignal | SignalMode::Phasor | SignalMode::Pulse(_) => signal_params.to_signal_object(None, duration),
+            SignalMode::Sine => signal_params.to_signal_object(Some(self.sine.clone()), duration),
+            SignalMode::Saw => signal_params.to_signal_object(Some(self.saw.clone()), duration),
+            SignalMode::Square => signal_params.to_signal_object(Some(self.square.clone()), duration),
+            SignalMode::Triangle => signal_params.to_signal_object(Some(self.triangle.clone()), duration)
         }
     }
 
@@ -197,8 +306,8 @@ impl QSignal
     /// 
     /// `f32` 
     /// 
-    pub fn procedural_oscillator(&self, signal_params: &mut SignalParams) -> f32 {
-        get_phase_motion(signal_params)
+    pub fn procedural_oscillator<T: SignalOperation>(&self, signal_params: &mut T) -> f32 {
+        signal_params.proc_oscillator()
     }
 
     /// Table-lookup oscillator
@@ -242,19 +351,20 @@ impl Default for QSignal
     }
 }
 
-fn get_phase_motion(signal_params: &mut SignalParams) -> f32 {
-    let phase = signal_params.freq * signal_params.phase_motion / signal_params.sr;
-    let sample = match signal_params.mode {
-        SignalMode::Sine => (TWOPI * phase).sin(),
+// --- TOOLS ---
+
+fn get_phase_motion(t: f32, freq: f32, amp: f32, phase_offset: f32, sr: f32, mode: &SignalMode) -> Result<f32, SignalError> {
+    let phase = freq * t / sr;
+    let sample = match mode {
+        SignalMode::Sine => (TWOPI * (phase + phase_offset)).sin(),
         SignalMode::Saw => 1.0 - 2.0 * (phase - (phase).floor()),
         SignalMode::Triangle => (2.0 / std::f32::consts::PI) * ((TWOPI * phase).sin()).asin(),
         SignalMode::Square => ((TWOPI * phase).sin()).signum(),
         SignalMode::Phasor => phase - (phase).floor(),
-        SignalMode::Pulse(duty) => if (phase - (phase).floor()) < duty { 1.0 } else { 0.0 }
+        SignalMode::Pulse(duty) => if (phase - (phase).floor()) < *duty { 1.0 } else { 0.0 },
+        SignalMode::ComplexSignal => { return Err(SignalError::SignalModeNotAllowed) }
     };
-    // println!("MOTION: {}", signal_params.phase_motion);
-    signal_params.update_pmotion(1.0);
-    sample * signal_params.amp
+    Ok(sample * amp)
 }
 
 fn get_oscillator_phase(wave_table: &WaveTable, signal_params: &mut SignalParams) -> f32 {
@@ -272,18 +382,27 @@ fn get_oscillator_phase(wave_table: &WaveTable, signal_params: &mut SignalParams
 }
 
 fn build_signal(wave_table: &WaveTable, signal_params: &mut SignalParams, duration: f32) -> Vec<f32> {
-
     let n_samples = (duration * signal_params.sr) as usize;
     (0..n_samples).map(|_| get_oscillator_phase(wave_table, signal_params)).collect::<Vec<f32>>()
 }
 
 fn build_signal_no_table(signal_params: &mut SignalParams, duration: f32) -> Result<Vec<f32>, SignalError> {
     let n_samples = (duration * signal_params.sr) as usize;
-    let mut sig: Vec<f32> = Vec::new();
+    let mut sig: Vec<f32> = vec![0.0; n_samples];
     for value in sig.iter_mut() {
         *value = match signal_params.mode {
-            SignalMode::Phasor => get_phase_motion(signal_params),
-            SignalMode::Pulse(_) => get_phase_motion(signal_params),
+            SignalMode::Phasor | SignalMode::Pulse(_) => { 
+                let sample = get_phase_motion(
+                    signal_params.phase_motion, 
+                    signal_params.freq, 
+                    signal_params.amp, 
+                    signal_params.phase_offset, 
+                    signal_params.sr, 
+                    &signal_params.mode
+                );
+                signal_params.update_pmotion(1.0);
+                sample.unwrap()
+            },
             _ => {
                return Err(SignalError::SignalModeNotAllowed)
             }
@@ -296,8 +415,16 @@ fn build_table(mode: SignalMode, table_length: f32) -> WaveTable {
     let mut table_signal = SignalParams { mode, freq: 1.0, sr: table_length, ..Default::default() };
     let mut table: Vec<f32> = vec![0.0; table_length as usize];
     for value in table.iter_mut() {
-        let sample = get_phase_motion(&mut table_signal);
-        *value = sample;
+        let sample = get_phase_motion(
+            table_signal.phase_motion, 
+            table_signal.freq, 
+            table_signal.amp, 
+            table_signal.phase_offset, 
+            table_signal.sr, 
+            &table_signal.mode
+        );
+        *value = sample.unwrap();
+        table_signal.update_pmotion(1.0);
     };
     WaveTable { table, table_length }
 }

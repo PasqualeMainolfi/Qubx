@@ -9,9 +9,12 @@ mod qmod {
     pub mod qsignals;
     pub mod qinterp;
     pub mod qconvolution;
+    pub mod qbuffers;
+    pub mod qoperations;
 }
 
 // --- PUB USE ---
+
 pub use qubx::Qubx;
 pub use qubx_common::{ StreamParameters, ProcessArg, DspProcessArgs };
 pub use qubx_components::*;
@@ -20,3 +23,5 @@ pub use qmod::qsignals;
 pub use qubx_types::*;
 pub use qmod::qinterp;
 pub use qmod::qconvolution;
+pub use qmod::qbuffers;
+pub use qmod::qoperations;

@@ -2,6 +2,7 @@
 
 use std::thread::JoinHandle;
 use std::default::Default;
+use crate::qsignals::{ SignalMode, SignalObject, WaveTable };
 
 
 pub enum QubxExceptions {
@@ -107,4 +108,22 @@ pub enum ProcessArg<T>
 {
     NoArgs,
     Closure(T),
+}
+
+pub enum ChannelError
+{
+    VectorIsEmpty,
+    ChannelNumbersError
+}
+
+pub trait Channels 
+{
+    fn to_nchannels(&mut self, out_channels: usize) -> Result<(), ChannelError>;
+}
+
+pub trait SignalOperation
+{
+    fn proc_oscillator(&mut self) -> f32;
+    fn to_signal_object(&mut self, wave_table: Option<WaveTable>, duration: f32) -> SignalObject;
+    fn get_mode(&self) -> SignalMode;
 }
