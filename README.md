@@ -73,11 +73,11 @@ q.start_monitoring_active_processe();
 
 // create and starting master out
 let mut master_out = q.create_master_streamout(String::from("M1"), stream_params);
-let master_clos: MasterClosureType = Box::new(|frame| {
+let master_clos: MasterCType = Box::new(|frame| {
     frame.iter_mut().for_each(|sample| { *sample *= 0.7 }) 
 });
 
-master_out.start(ProcessArg::Closure::<MasterClosureType>(master_clos));
+master_out.start(ProcessArg::Closure::<MasterCType>(master_clos));
 
 // create dsp process and associate it with master out names "M1"
 // deactivate parallel-data (false)
@@ -95,7 +95,7 @@ loop {
         y
     });
 
-    dsp_process1.start(DspProcessArgs::AudioDataAndClosure::<DspClosureNoArgsType, DspClosureWithArgsType>(audio_data1, dsp_clos));
+    dsp_process1.start(DspProcessArgs::AudioDataAndClosure::<DspCNAType, DspCAType>(audio_data1, dsp_clos));
 
     if !run {
         break;
@@ -116,9 +116,10 @@ or use a duplex stream
 ```rust
 // create and starting duplex stream
 let mut duplex = q.create_duplex_dsp_process(stream_params);
-duplex.start(|frame| { frame.to_vec() });
+let clos: DuplexCType = Box::new(|frame| frame.to_vec());
+duplex.start(ProcessArg::Closure(clos));
 
-// define the duration
+// define duration
 for i in 0..(10 * SR as usize) {
     std::thread::sleep(std::time::Duration::from_secs_f32(1.0 / SR as f32));
 }
