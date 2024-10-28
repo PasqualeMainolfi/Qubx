@@ -11,6 +11,8 @@ mod qmod {
     pub mod qconvolution;
     pub mod qbuffers;
     pub mod qoperations;
+    pub mod qtable;
+    pub mod shared_tools;
 }
 
 // --- PUB USE ---
@@ -25,3 +27,4 @@ pub use qmod::qinterp;
 pub use qmod::qconvolution;
 pub use qmod::qbuffers;
 pub use qmod::qoperations;
+pub use qmod::qtable;

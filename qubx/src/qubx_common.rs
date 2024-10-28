@@ -2,7 +2,7 @@
 
 use std::thread::JoinHandle;
 use std::default::Default;
-use crate::qsignals::{ SignalMode, SignalObject, WaveTable };
+use crate::{qinterp::Interp, qsignals::{ SignalMode, SignalObject }, qtable::TableParams};
 
 
 pub enum QubxExceptions {
@@ -124,6 +124,7 @@ pub trait Channels
 pub trait SignalOperation
 {
     fn proc_oscillator(&mut self) -> f32;
-    fn to_signal_object(&mut self, wave_table: Option<WaveTable>, duration: f32) -> SignalObject;
+    fn to_signal_object(&mut self, duration: f32, wave_table: Option<&TableParams>, interp: Option<Interp>) -> SignalObject;
     fn get_mode(&self) -> SignalMode;
+    fn get_sr(&self) -> f32;
 }

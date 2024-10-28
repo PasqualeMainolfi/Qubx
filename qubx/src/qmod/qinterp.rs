@@ -22,7 +22,7 @@ impl PhaseInterpolationIndex
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
-pub enum SignalInterp
+pub enum Interp
 {
     NoInterp,
     Linear,
@@ -31,7 +31,7 @@ pub enum SignalInterp
     Hermite
 }
 
-impl SignalInterp {
+impl Interp {
     /// Make interpolation
     /// 
     /// # Args
@@ -54,8 +54,8 @@ impl SignalInterp {
             1 => Ok(buffer[0]),
             2 => {
                 match self {
-                    SignalInterp::Linear => Ok((1.0 - mu) * buffer[0] + mu * buffer[1]),
-                    SignalInterp::Cosine => {
+                    Interp::Linear => Ok((1.0 - mu) * buffer[0] + mu * buffer[1]),
+                    Interp::Cosine => {
                         let mu2 = (1.0 - (mu * std::f32::consts::PI)) / 2.0;
                         Ok(buffer[0] * (1.0 - mu2) + mu2 * buffer[1])
                     },
@@ -65,7 +65,7 @@ impl SignalInterp {
             3 => Ok((1.0 - mu) * buffer[1] + mu * buffer[2]),
             4 => {
                 match self {
-                    SignalInterp::Cubic => {
+                    Interp::Cubic => {
                         let y0 = buffer[0];
                         let y1 = buffer[1];
                         let y2 = buffer[2];
@@ -76,7 +76,7 @@ impl SignalInterp {
                         let a3 = y1;
                         Ok(a0 * mu.powi(3) + a1 * mu.powi(2) + a2 * mu + a3)
                     },
-                    SignalInterp::Hermite => {
+                    Interp::Hermite => {
                         let y0 = buffer[0];
                         let y1 = buffer[1];
                         let y2 = buffer[2];

@@ -5,7 +5,9 @@ use std::time::Duration;
 use std::collections::HashMap;
 use std::fmt::Display;
 use crate::qubx_common::{ Channels, ChannelError };
-use crate::qoperations::split_into_nchannels;
+use super::{ 
+	qinterp::{ Interp, PhaseInterpolationIndex }, qoperations::split_into_nchannels, qtable::{ TableArg, TableError, TableMode, TableParams }, shared_tools::{ interp_buffer_write, update_and_reset_increment, update_increment }
+};
 
 #[derive(Debug, Clone, Copy)]
 pub enum EnvelopeError
@@ -13,7 +15,8 @@ pub enum EnvelopeError
 	EnvPointsError,
 	EnvExponetialZeroValue,
 	EnvLengthExceeded,
-	EnvToSignalErrorDifferentChannelNumbers
+	EnvToSignalErrorDifferentChannelNumbers,
+	TableNotAllowed
 }
 
 impl fmt::Display for EnvelopeError {
@@ -22,7 +25,8 @@ impl fmt::Display for EnvelopeError {
 			Self::EnvExponetialZeroValue => write!(f, "<EnvExponentialZeroValue>"),
 			Self::EnvPointsError => write!(f, "<EnvPointsError>"),
 			Self::EnvLengthExceeded => write!(f, "<EnvLengthExceeded>"),
-			Self::EnvToSignalErrorDifferentChannelNumbers => write!(f, "<EnvToSignalErrorDifferentChannelNumbers>")
+			Self::EnvToSignalErrorDifferentChannelNumbers => write!(f, "<EnvToSignalErrorDifferentChannelNumbers>"),
+			Self::TableNotAllowed => write!(f, "<TableNotAllowed>"),
 		}
 	}
 }
@@ -92,7 +96,28 @@ impl EnvRT
 pub struct EnvParams
 {
 	pub shape: Vec<f32>,
-	pub mode: EnvMode
+	pub mode: EnvMode,
+	phase_motion: f32,
+	interp_buffer: Vec<f32>
+}
+
+impl EnvParams
+{
+	pub fn new(shape: Vec<f32>, mode: EnvMode) -> Self {
+		Self { shape, mode, phase_motion: 0.0, interp_buffer: Vec::new() }
+	}
+
+	fn update_and_set_pmotion(&mut self, value: f32, table_length: f32) {
+        update_and_reset_increment(&mut self.phase_motion, value, table_length);
+    }
+    
+    fn update_pmotion(&mut self, value: f32) {
+        update_increment(&mut self.phase_motion, value);
+    }
+
+    fn write_interp_buffer(&mut self, interp: Interp, sample: f32) {
+        interp_buffer_write(&mut self.interp_buffer, interp, sample);
+    }
 }
 
 /// Adsr Parameters
@@ -127,7 +152,7 @@ impl AdsrParams
 		let end_value = attack_value;
 
 		let shape = [attack_value, t0, 1.0, t1, sustain_value, t2, sustain_value, t3, end_value];
-		EnvParams { shape: shape.to_vec(),  mode: self.mode }
+		EnvParams::new(shape.to_vec(), self.mode)
 	}
 }
 
@@ -337,6 +362,23 @@ impl QEnvelope
 		} else {
 			if !length_exceeded { return Ok(e.current_value) } 
 			Err(EnvelopeError::EnvLengthExceeded)
+		}
+	}
+
+	pub fn advance_envelope_from_table(&self, envelope_table: &mut TableParams, interp: Interp, duration: f32) -> Result<f32, EnvelopeError> {
+		match envelope_table.mode {
+			TableMode::Envelope(ref mut params) => {
+				let f = 1.0 / duration;
+				let si = f * envelope_table.table_length / self.sr;
+				let table_index = PhaseInterpolationIndex::new(params.phase_motion);
+				let index_int = table_index.int_part;
+				let frac_part = table_index.frac_part;
+				params.write_interp_buffer(interp, envelope_table.table[index_int]);
+				let sample = interp.get_table_interpolation(frac_part, &params.interp_buffer).unwrap();
+				params.update_and_set_pmotion(si, envelope_table.table_length);
+				Ok(sample)
+			},
+			TableMode::Signal(_) => Err(EnvelopeError::TableNotAllowed)
 		}
 	}
 }

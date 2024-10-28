@@ -6,10 +6,11 @@ use qubx::{
     DspCAType,
     DspCNAType, 
     MasterCType,
-    qinterp::SignalInterp,
+    qinterp::Interp,
     qsignals::{ QSignal, SignalMode, SignalParams, ComplexSignalParams },
     qenvelopes::{ QEnvelope, EnvParams, EnvMode },
-    qoperations::envelope_to_signal
+    qoperations::envelope_to_signal,
+    qtable::{ QTable, TableMode, TableArg }
 };
 
 const SR: i32 = 44100;
@@ -38,17 +39,18 @@ pub fn sigenv_example() {
 
     let duration = 1.1;
 
-    let mut sine = QSignal::new(SR as usize);
 	let mut exp_env = QEnvelope::new(SR as f32);
     
-    let mut sine_params = SignalParams::new(SignalMode::Sine, SignalInterp::Cubic, 440.0, 0.7, 0.0, SR as f32);
-    let signal_sine = sine.into_signal_object(&mut sine_params, duration);
+    let mut sine_params = SignalParams::new(SignalMode::Sine, 440.0, 0.7, 0.0, SR as f32);
+    let mut sine_table = QTable::new();
+    let _ = sine_table.write_table("sine", TableMode::Signal(SignalMode::Sine), SR as usize);
+    let signal_sine = QSignal::into_signal_object(&mut sine_params, duration, TableArg::WithTable((sine_table.get_table("sine"), Interp::Cubic))).unwrap();
     
-    let mut comp_params = ComplexSignalParams::new([440.0, 880.0, 1320.0].to_vec(), [0.7, 0.5, 0.3].to_vec(), None, SR as f32);
-    let signal_comp = sine.into_signal_object(&mut comp_params, duration);
+    let mut comp_params = ComplexSignalParams::new([440.0, 567.0, 768.0].to_vec(), [0.7, 0.5, 0.3].to_vec(), None, SR as f32);
+    let signal_comp = QSignal::into_signal_object(&mut comp_params, duration, TableArg::NoTable).unwrap();
 
     let env_points = vec![0.001, 0.1, 1.0, duration - 0.1, 0.001];
-    let exponential_env_params = EnvParams { shape: env_points, mode: EnvMode::Exponential };
+    let exponential_env_params = EnvParams::new(env_points, EnvMode::Exponential);
     let env_shape = exp_env.into_envelope_object(&exponential_env_params);
 
     // let dsp_clos: DspClosureNoArgsType = Box::new(move || {

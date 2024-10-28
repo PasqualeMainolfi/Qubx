@@ -1,24 +1,21 @@
 use qubx::qsignals::{ SignalMode, QSignal, SignalParams };
-use qubx::qinterp::SignalInterp;
+use qubx::qtable::{ QTable, TableMode, TableArg };
+use qubx::qinterp::Interp;
 
 const SR: f32 = 16.0;
 
 pub fn signals_example() {
-    let mut params = SignalParams::new(SignalMode::Sine, SignalInterp::Linear, 1.0, 1.0, 0.0, SR);
-    let mut signal = QSignal::new(16);
+    let mut params = SignalParams::new(SignalMode::Sine, 1.0, 1.0, 0.0, SR);
     for i in 0..(SR as usize) {
-        let sample = signal.procedural_oscillator(&mut params);
+        let sample = QSignal::procedural_oscillator(&mut params);
         println!("SAMPLE {i}: {sample}");
     }
 
-    let sinel = signal.into_signal_object(&mut params, 1.0);
+    let mut sine_table = QTable::new();
+    let _ = sine_table.write_table("sine", TableMode::Signal(SignalMode::Sine), 16);
+
+    let sinel = QSignal::into_signal_object(&mut params, 1.0, TableArg::WithTable((sine_table.get_table("sine"), Interp::Linear))).unwrap();
     println!("{:?}", sinel.vector_signal);
 
-    let mut paramsc = SignalParams::new(SignalMode::Sine, SignalInterp::Cubic, 2.5, 1.0, 0.0, SR);
-    let sinec = signal.into_signal_object(&mut paramsc, 1.0);
-    println!("CUBIC: {:?}", sinec.vector_signal);
-    
-    let mut paramsh = SignalParams::new(SignalMode::Sine, SignalInterp::Hermite, 2.5, 1.0, 0.0, SR);
-    let sineh = signal.into_signal_object(&mut paramsh, 1.0);
-    println!("HERMITE: {:?}", sineh.vector_signal);
+
 }
