@@ -96,18 +96,21 @@ impl Process {
 }
 
 #[derive(Debug)]
-pub enum DspProcessArgs<T, U>
+pub enum DspProcessArg<F1: , F2>
+where
+    F1: Fn() -> Vec<f32> + Send + Sync + 'static,
+    F2: for<'a> Fn(&'a [f32]) -> Vec<f32> + Send + Sync + 'static,
 {
-    AudioData(Vec<f32>),
-    Closure(T),
-    AudioDataAndClosure(Vec<f32>, U)
+    Source(Vec<f32>),
+    PatchSpace(F1),
+    HybridSpace(Vec<f32>, F2)
 }
 
 #[derive(Debug)]
 pub enum ProcessArg<T>
 {
     NoArgs,
-    Closure(T),
+    PatchSpace(T),
 }
 
 pub enum ChannelError
@@ -127,4 +130,13 @@ pub trait SignalOperation
     fn to_signal_object(&mut self, duration: f32, wave_table: Option<&TableParams>, interp: Option<Interp>) -> SignalObject;
     fn get_mode(&self) -> SignalMode;
     fn get_sr(&self) -> f32;
+}
+
+pub enum ProceduralOperationError
+{
+    DataDurationReached
+}
+
+pub trait ProceduralOperation {
+    fn procedural_sampler(&mut self, duration: f32) -> Result<f32, ProceduralOperationError>;
 }

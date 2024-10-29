@@ -1,4 +1,4 @@
-use crate::qubx_common::{ Process, ProcessState, DspProcessArgs, ProcessArg };
+use crate::qubx_common::{ Process, ProcessState, DspProcessArg, ProcessArg };
 use crate::qubx_components::{ DspProcess, DuplexProcess, MasterStreamoutProcess, MonitorProcess };
 use std::sync::{ Arc, Mutex };
 
@@ -88,7 +88,7 @@ impl QubxDspProcess {
     }
 
     // pub fn start<F>(&self, audio_data: Vec<f32>, dsp_function: Option<F>)
-    pub fn start<F1, F2>(&self, args: DspProcessArgs<F1, F2>)
+    pub fn start<F1, F2>(&self, args: DspProcessArg<F1, F2>)
     where
         F1: Fn() -> Vec<f32> + Send + Sync + 'static,
         F2: for<'a> Fn(&'a [f32]) -> Vec<f32> + Send + Sync + 'static,

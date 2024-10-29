@@ -3,6 +3,7 @@ mod signals_example;
 mod simple_example;
 mod convolution_example;
 mod sigenv_example;
+mod buffers_example;
 
 
 fn main() {
@@ -10,4 +11,5 @@ fn main() {
     // signals_example::signals_example();
     // convolution_example::convolution_example();
     sigenv_example::sigenv_example();
+    // buffers_example::buffers_example();
 }

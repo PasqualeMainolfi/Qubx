@@ -6,7 +6,10 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use crate::qubx_common::{ Channels, ChannelError };
 use super::{ 
-	qinterp::{ Interp, PhaseInterpolationIndex }, qoperations::split_into_nchannels, qtable::{ TableArg, TableError, TableMode, TableParams }, shared_tools::{ interp_buffer_write, update_and_reset_increment, update_increment }
+	qinterp::{ Interp, PhaseInterpolationIndex }, 
+	qoperations::split_into_nchannels, 
+	qtable::{ TableArg, TableError, TableMode, TableParams }, 
+	shared_tools::{ interp_buffer_write, update_and_reset_increment, update_increment }
 };
 
 #[derive(Debug, Clone, Copy)]

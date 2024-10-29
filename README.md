@@ -4,6 +4,11 @@ Qubx is a Rust library for managing and processing audio streams in parallel.
 Related paper: P. Mainolfi, Qubx: a Rust Library for Queue-Based Multithreaded
 Real-Time Parallel Audio Streams Processing and Managment, Dafx24, Surrey UK, 2024.  
 
+>**Version 0.2.2**
+
+- Bug fixes
+- Change Master, Duplex and Dsp Process Type name. See (`ProcessArgs` and `DspProessArg`)
+
 >**Version 0.2.1**
 
 - Bug fixes
@@ -73,11 +78,11 @@ q.start_monitoring_active_processe();
 
 // create and starting master out
 let mut master_out = q.create_master_streamout(String::from("M1"), stream_params);
-let master_clos: MasterCType = Box::new(|frame| {
+let master_clos: MasterPatchType = Box::new(|frame| {
     frame.iter_mut().for_each(|sample| { *sample *= 0.7 }) 
 });
 
-master_out.start(ProcessArg::Closure::<MasterCType>(master_clos));
+master_out.start(ProcessArg::PatchSpace(master_clos));
 
 // create dsp process and associate it with master out names "M1"
 // deactivate parallel-data (false)
@@ -90,12 +95,12 @@ loop {
     // .
     // ...generates audio_data
 
-    let dsp_clos: DspClosureWithArgsType = Box::new(|_audio_data| {
+    let dsp_clos = Box::new(|_audio_data| {
         let y = _audio_data.iter().map(|sample| sample * 0.7).collect();
         y
     });
 
-    dsp_process1.start(DspProcessArgs::AudioDataAndClosure::<DspCNAType, DspCAType>(audio_data1, dsp_clos));
+    dsp_process1.start(DspProcessArgs::HybridType::<DspPatchType, DspHybridType>(audio_data1, dsp_clos));
 
     if !run {
         break;
@@ -116,8 +121,8 @@ or use a duplex stream
 ```rust
 // create and starting duplex stream
 let mut duplex = q.create_duplex_dsp_process(stream_params);
-let clos: DuplexCType = Box::new(|frame| frame.to_vec());
-duplex.start(ProcessArg::Closure(clos));
+let clos: DuplexPatchType = Box::new(|frame| frame.to_vec());
+duplex.start(ProcessArg::PatchSpace(clos));
 
 // define duration
 for i in 0..(10 * SR as usize) {

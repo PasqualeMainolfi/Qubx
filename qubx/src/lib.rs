@@ -18,7 +18,13 @@ mod qmod {
 // --- PUB USE ---
 
 pub use qubx::Qubx;
-pub use qubx_common::{ StreamParameters, ProcessArg, DspProcessArgs };
+pub use qubx_common::{ 
+    StreamParameters, 
+    ProcessArg, 
+    DspProcessArg, 
+    ProceduralOperation, 
+    ProceduralOperationError 
+};
 pub use qubx_components::*;
 pub use qmod::qenvelopes;
 pub use qmod::qsignals;

@@ -2,6 +2,7 @@
 /paper
 /qubx/target
 /examples/qubx_example/target
+TODO.md
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

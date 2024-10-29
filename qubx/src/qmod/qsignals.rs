@@ -1,7 +1,7 @@
 #![allow(unused)]
 
 use std::collections::HashMap;
-use crate::qubx_common::{ Channels, ChannelError, SignalOperation };
+use crate::qubx_common::{ Channels, ChannelError, SignalOperation, ProceduralOperation, ProceduralOperationError };
 use super::{ 
     qtable::{ TableError, TableMode, TableArg, TableParams }, 
     shared_tools::{ get_phase_motion, update_and_reset_increment, update_increment, interp_buffer_write, build_signal, build_signal_no_table, get_oscillator_phase },
@@ -19,32 +19,6 @@ pub enum SignalError
     SignalModeAndTableModeMustBeTheSame,
     TableModeNotAllowedForSignal,
     InterpModeNotAllowed
-}
-
-/// Signal Parameters
-/// 
-/// `mode`: type of signal (see `SignalMode`)  
-/// `interp`: interpolation type (see `Interp`)  
-/// `freq`: frequency value in Hz  
-/// `amp`: amplitude value  
-/// `phase_offset`: start phase value in range [0, 1]
-/// `sr`: sample rate in Hz  
-/// 
-
-struct PhaseInterpolationIndex
-{
-    int_part: usize,
-    frac_part: f32
-}
-
-impl PhaseInterpolationIndex
-{
-    fn new(index: f32) -> Self {
-        let mut ip = index as i32;
-        ip = if ip < 0 { 0 } else { ip };
-        let frac_part = index.fract();
-        Self { int_part: ip as usize, frac_part }
-    }
 }
 
 /// Signal Component
@@ -112,6 +86,13 @@ impl SignalOperation for ComplexSignalParams
         self.sr
     }
 
+}
+
+impl ProceduralOperation for ComplexSignalParams
+{
+    fn procedural_sampler(&mut self, duration: f32) -> Result<f32, ProceduralOperationError> {
+        if self.phase_motion < self.sr * duration { Ok(self.proc_oscillator()) } else { Err(ProceduralOperationError::DataDurationReached) }
+    }
 }
 
 /// Signal Parameters
@@ -196,6 +177,13 @@ impl SignalOperation for SignalParams
         self.sr
     }
 
+}
+
+impl ProceduralOperation for SignalParams
+{
+    fn procedural_sampler(&mut self, duration: f32) -> Result<f32, ProceduralOperationError> {
+        if self.phase_motion < self.sr * duration { Ok(self.proc_oscillator()) } else { Err(ProceduralOperationError::DataDurationReached) }
+    }
 }
 
 impl Default for SignalParams
