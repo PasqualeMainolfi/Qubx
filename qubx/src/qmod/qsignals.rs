@@ -1,7 +1,7 @@
 #![allow(unused)]
 
 use std::collections::HashMap;
-use crate::qubx_common::{ Channels, ChannelError, SignalOperation, ProceduralOperation, ProceduralOperationError };
+use crate::qubx_common::{ Channels, ChannelError, SignalOperation };
 use super::{ 
     qtable::{ TableError, TableMode, TableArg, TableParams }, 
     shared_tools::{ get_phase_motion, update_and_reset_increment, update_increment, interp_buffer_write, build_signal, build_signal_no_table, get_oscillator_phase },
@@ -88,13 +88,6 @@ impl SignalOperation for ComplexSignalParams
 
 }
 
-impl ProceduralOperation for ComplexSignalParams
-{
-    fn procedural_sampler(&mut self, duration: f32) -> Result<f32, ProceduralOperationError> {
-        if self.phase_motion < self.sr * duration { Ok(self.proc_oscillator()) } else { Err(ProceduralOperationError::DataDurationReached) }
-    }
-}
-
 /// Signal Parameters
 /// 
 /// `mode`: type of signal (see `SignalMode`)  
@@ -177,13 +170,6 @@ impl SignalOperation for SignalParams
         self.sr
     }
 
-}
-
-impl ProceduralOperation for SignalParams
-{
-    fn procedural_sampler(&mut self, duration: f32) -> Result<f32, ProceduralOperationError> {
-        if self.phase_motion < self.sr * duration { Ok(self.proc_oscillator()) } else { Err(ProceduralOperationError::DataDurationReached) }
-    }
 }
 
 impl Default for SignalParams

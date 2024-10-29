@@ -12,7 +12,6 @@ use qubx::{
     qoperations::envelope_to_signal,
     qtable::{ QTable, TableMode, TableArg },
     qbuffers::AudioBuffer,
-    ProceduralOperation
 };
 
 const SR: i32 = 44100;
@@ -73,10 +72,10 @@ pub fn sigenv_example() {
         let path: &str = "/Users/pm/AcaHub/AudioSamples/cane.wav";
         let buffer = AudioBuffer::new(SR);
         let mut audio = buffer.to_audio_object(path).unwrap();
-        audio.set_read_speed(2.5);
+        audio.set_read_speed(0.5);
         audio.set_read_again(true);
         let mut signal = Vec::new();
-        while let Ok(sample) = audio.procedural_sampler(3.0) {
+        while let Ok(sample) = audio.procedural_sampler(2.5, Interp::Cubic) {
             signal.push(sample);
         }
         signal

@@ -131,12 +131,3 @@ pub trait SignalOperation
     fn get_mode(&self) -> SignalMode;
     fn get_sr(&self) -> f32;
 }
-
-pub enum ProceduralOperationError
-{
-    DataDurationReached
-}
-
-pub trait ProceduralOperation {
-    fn procedural_sampler(&mut self, duration: f32) -> Result<f32, ProceduralOperationError>;
-}

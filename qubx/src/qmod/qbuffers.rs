@@ -5,7 +5,7 @@ use std::io::Read;
 use std::process::{ Command, Stdio };
 use portaudio::stream::Buffer;
 
-use crate::qubx_common::{ Channels, ChannelError, ProceduralOperation, ProceduralOperationError };
+use crate::qubx_common::{ Channels, ChannelError };
 use super::{
     qsignals::SignalObject,
     qoperations::split_into_nchannels,
@@ -20,7 +20,8 @@ pub enum BufferError
     ErrorInReadingChannelNumbers,
     NullOpenFileBufferEmpty,
     BufferLengthExceeded,
-    ReadOffsetGratherThanAudioLength
+    ReadOffsetGratherThanAudioLength,
+    SamplerDataDurationReached
 }
 
 #[derive(Debug)]
@@ -58,6 +59,16 @@ impl AudioObject
         self.read_again = value
     }
 
+    pub fn procedural_sampler(&mut self, duration: f32, interp: Interp) -> Result<f32, BufferError> {
+        let sample = if (self.elapsed_time as f32) < self.sr * duration { 
+            AudioBuffer::read_from_audio_object(self, interp).unwrap()
+        } else { 
+            return Err(BufferError::SamplerDataDurationReached) 
+        };
+        self.elapsed_time += 1;
+        Ok(sample)
+    }
+
     pub(crate) fn update_and_set_pmotion(&mut self, value: f32, table_length: f32) {
         update_and_reset_increment(&mut self.phase_motion, value, table_length);
     }
@@ -70,19 +81,6 @@ impl AudioObject
         interp_buffer_write(&mut self.interp_buffer, interp, sample);
     }
 
-}
-
-impl ProceduralOperation for AudioObject
-{
-    fn procedural_sampler(&mut self, duration: f32) -> Result<f32, ProceduralOperationError> {
-        let sample = if (self.elapsed_time as f32) < self.sr * duration { 
-            AudioBuffer::read_from_audio_object(self, Interp::Linear).unwrap()
-        } else { 
-            return Err(ProceduralOperationError::DataDurationReached) 
-        };
-        self.elapsed_time += 1;
-        Ok(sample)
-    }
 }
 
 impl Default for AudioObject

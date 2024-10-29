@@ -22,8 +22,6 @@ pub use qubx_common::{
     StreamParameters, 
     ProcessArg, 
     DspProcessArg, 
-    ProceduralOperation, 
-    ProceduralOperationError 
 };
 pub use qubx_components::*;
 pub use qmod::qenvelopes;
