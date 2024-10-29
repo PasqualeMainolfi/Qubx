@@ -1,3 +1,4 @@
+mod check_list;
 mod qubx;
 mod qlist;
 mod qubx_components;
@@ -17,6 +18,8 @@ mod qmod {
 
 // --- PUB USE ---
 
+
+
 pub use qubx::Qubx;
 pub use qubx_common::{ 
     StreamParameters, 
@@ -32,3 +35,5 @@ pub use qmod::qconvolution;
 pub use qmod::qbuffers;
 pub use qmod::qoperations;
 pub use qmod::qtable;
+
+

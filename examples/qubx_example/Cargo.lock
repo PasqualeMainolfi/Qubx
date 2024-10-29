@@ -211,7 +211,7 @@ dependencies = [
 
 [[package]]
 name = "qubx"
-version = "0.1.0"
+version = "0.2.2"
 dependencies = [
  "concurrent-queue",
  "portaudio",
@@ -222,7 +222,7 @@ dependencies = [
 
 [[package]]
 name = "qubx_examples"
-version = "0.1.0"
+version = "0.2.2"
 dependencies = [
  "qubx",
  "rand",

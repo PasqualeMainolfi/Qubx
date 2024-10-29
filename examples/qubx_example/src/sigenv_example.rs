@@ -40,7 +40,7 @@ pub fn sigenv_example() {
     });
     master_out.start(ProcessArg::PatchSpace(master_clos));
 
-    let mut dsp_process = q.create_parallel_dsp_process(String::from("M1"), true);
+    let mut dsp_process = q.create_parallel_dsp_process(String::from("M1"), false);
 
     let duration = 1.1;
 
