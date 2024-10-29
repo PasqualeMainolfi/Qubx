@@ -54,7 +54,16 @@ cargo build --release
 Import Qubx and StreamParameters
 
 ```rust
-use qubx::{ Qubx, StreamParameters, ProcessArg, DspProcessArgs, DspClosureNoArgsType, DspClosureWithArgsType, DuplexClosureType, MasterClosureType };
+use qubx::{ 
+    Qubx, 
+    StreamParameters, 
+    ProcessArg, 
+    MasterPatchType, 
+    DuplexPatchType, 
+    DspProcessArg, 
+    DspPatchType, 
+    DspHybridType
+};
 
 ```
 
