@@ -1,9 +1,11 @@
 #![allow(unused)]
 
 use std::default;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::process::{ Command, Stdio };
 use portaudio::stream::Buffer;
+use std::path::Path;
+use std::fs;
 
 use crate::qubx_common::{ Channels, ChannelError };
 use super::{
@@ -13,6 +15,47 @@ use super::{
     qinterp::{ Interp, PhaseInterpolationIndex }
 };
 
+
+// pub enum BitSize
+// {
+//     Eight,
+//     Sixteen,
+//     TwentyFour,
+//     ThirtyTwo,
+//     SixtyFour
+// }
+
+// pub enum AudioCodec
+// {
+//     PcmInt(BitSize),
+//     PcmFloat(BitSize)
+// }
+
+// impl AudioCodec
+// {
+//     fn get_codec<'a >(&self) -> Result<&'a str, BufferError> {
+//         let format = match self {
+//             Self::PcmInt(bit) => {
+//                 match bit {
+//                     BitSize::Eight => "s8",
+//                     BitSize::Sixteen => "s16le", 
+//                     BitSize::TwentyFour => "s24le",
+//                     BitSize::ThirtyTwo => "s32le",
+//                     _ => return Err(BufferError::WriteFormatNotValid)
+//                 }
+//             },
+//             Self::PcmFloat(bit) => {
+//                 match bit {
+//                     BitSize::ThirtyTwo => "f32le",
+//                     BitSize::SixtyFour => "f64le",
+//                     _ => return Err(BufferError::WriteFormatNotValid)
+//                 }
+//             }
+//         };
+//         Ok(format)
+//     }
+// }
+
 #[derive(Debug, Clone, Copy)]
 pub enum BufferError
 {
@@ -21,7 +64,9 @@ pub enum BufferError
     NullOpenFileBufferEmpty,
     BufferLengthExceeded,
     ReadOffsetGratherThanAudioLength,
-    SamplerDataDurationReached
+    SamplerDataDurationReached,
+    WriteFormatNotValid,
+    ErrorInWritingFile
 }
 
 #[derive(Debug)]
@@ -29,21 +74,21 @@ pub struct AudioObject
 {
     pub vector_signal: Vec<f32>,
     pub n_channels: usize,
-    pub n_samples: usize,
-    pub read_speed: f32,
-    pub read_offset: f32,
-    pub read_again: bool,
     pub sr: f32,
+    pub(crate) read_speed: f32,
+    pub(crate) read_offset: f32,
+    pub(crate) read_again: bool,
+    pub(crate) n_samples: usize,
     pub(crate) phase_motion: f32,
     pub(crate) interp_buffer: Vec<f32>,
-    elapsed_time: usize
+    pub(crate) elapsed_time: usize
 }
 
 impl AudioObject
 {
-    pub fn new(vector_signal: Vec<f32>, n_channels: usize, n_samples: usize, read_speed: f32, sr: f32, time_offset: f32, read_again: bool) -> Self {
-        let offset = (time_offset * sr).ceil();
-        Self { vector_signal, n_channels, n_samples, read_speed, read_offset: offset, read_again, sr, phase_motion: 0.0, interp_buffer: Vec::new(), elapsed_time: 0 }
+    pub fn new(vector_signal: Vec<f32>, n_channels: usize, sr: f32) -> Self {
+        let n_samples = vector_signal.len() / n_channels;
+        Self { vector_signal, n_channels, sr, read_speed: 1.0, read_offset: 0.0, read_again: false, n_samples, phase_motion: 0.0, interp_buffer: Vec::new(), elapsed_time: 0 }
     }
 
     pub fn set_read_speed(&mut self, value: f32) {
@@ -83,24 +128,6 @@ impl AudioObject
 
 }
 
-impl Default for AudioObject
-{
-    fn default() -> Self {
-        Self { 
-            vector_signal: Vec::new(), 
-            n_channels: 1,
-            n_samples: 0, 
-            read_speed: 1.0, 
-            read_offset: 0.0, 
-            read_again: true, 
-            sr: 44100.0,
-            phase_motion: 0.0,
-            interp_buffer: Vec::new(),
-            elapsed_time: 0
-        }
-    }
-}
-
 impl Channels for AudioObject
 {
     fn to_nchannels(&mut self, out_channels: usize) -> Result<(), ChannelError> {
@@ -122,7 +149,6 @@ impl AudioBuffer
     }
 
     pub fn to_audio_object(&self, path: &str) -> Result<AudioObject, BufferError> {
-
         let output = Command::new("ffprobe")
             .arg("-v")
             .arg("error")
@@ -176,17 +202,11 @@ impl AudioBuffer
             Vec::from(slice_buffer)
         };
 
-        let mut audiobj = AudioObject { 
-            vector_signal: samples, 
-            n_channels: cn as usize, 
-            n_samples, 
-            sr: self.sr as f32, 
-            ..Default::default() 
-        };
+        let mut audiobj = AudioObject::new(samples, cn as usize, self.sr as f32);
         Ok(audiobj)
     }
 
-    pub fn read_from_audio_object(audio_object: &mut AudioObject, interp: Interp) -> Result<f32, BufferError> {
+    fn read_from_audio_object(audio_object: &mut AudioObject, interp: Interp) -> Result<f32, BufferError> {
         if audio_object.read_offset >= audio_object.n_samples as f32 { return Err(BufferError::ReadOffsetGratherThanAudioLength) }
         let phase = audio_object.phase_motion + audio_object.read_offset;
 
@@ -203,6 +223,45 @@ impl AudioBuffer
         audio_object.write_interp_buffer(interp, audio_object.vector_signal[index_int]);
         let sample = interp.get_table_interpolation(frac_part, &audio_object.interp_buffer).unwrap();
         Ok(sample)
+    }
+
+    pub fn write_to_file(file_name: &str, audio_object: &AudioObject) -> Result<(), BufferError> {
+        if audio_object.vector_signal.is_empty() { return Err(BufferError::NullOpenFileBufferEmpty) }
+        let mut name: String = file_name.split(".").collect::<Vec<&str>>().join("").to_string();
+        name.push_str(".wav");
+
+        if Path::new(&name).exists() {
+            println!("[INFO] File {} exists, removing and rewriting...", &name); 
+            fs::remove_file(&name).unwrap() 
+        }
+
+        let mut com = Command::new("ffmpeg")
+            .arg("-f")
+            .arg("f32le")
+            .arg("-c:a")
+            .arg("pcm_f32le")
+            .arg("-ac")
+            .arg(audio_object.n_channels.to_string())
+            .arg("-ar")
+            .arg(audio_object.sr.to_string())
+            .arg("-i")
+            .arg("pipe:0")
+            .arg(&name)
+            .stdin(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        
+        if let Some(stdin) = com.stdin.as_mut() {
+            for sample in audio_object.vector_signal.iter() {
+                stdin.write_all(&sample.to_le_bytes()).unwrap();
+            }
+        }
+
+        let status = com.wait().unwrap();
+        if !status.success() { return Err(BufferError::ErrorInWritingFile) }
+        println!("[INFO] File {} saved!", &name);
+        Ok(())
     }
 }
 

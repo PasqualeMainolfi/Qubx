@@ -14,6 +14,10 @@ use qubx::{
     qbuffers::AudioBuffer,
 };
 
+use std::sync::{ Arc, Mutex };
+
+
+
 const SR: i32 = 44100;
 const CHANNELS: u32 = 1;
 const CHUNK: u32 = 1024;
@@ -62,16 +66,17 @@ pub fn sigenv_example() {
     dsp_process.start(DspProcessArg::Source::<DspPatchType, DspHybridType>(enveloped_comp_signal.vector_signal));
     std::thread::sleep(std::time::Duration::from_secs_f32(1.5));
     
+    // let buffer = AudioBuffer::new(SR);
+    let buffer = Arc::new(Mutex::new(AudioBuffer::new(SR)));
+    let buffer_clone = Arc::clone(&buffer);
     let path: &str = "/Users/pm/AcaHub/AudioSamples/cane.wav";
-    let buffer = AudioBuffer::new(SR);
-    let audio = buffer.to_audio_object(path).unwrap();
-    dsp_process.start(DspProcessArg::Source::<DspPatchType, DspHybridType>(audio.vector_signal));
-    std::thread::sleep(std::time::Duration::from_secs_f32(5.0));
+    let audio = buffer_clone.lock().unwrap().to_audio_object(path).unwrap();
+    dsp_process.start(DspProcessArg::Source::<DspPatchType, DspHybridType>(audio.vector_signal.clone()));
+    std::thread::sleep(std::time::Duration::from_secs_f32(1.0));
     
-    dsp_process.start(DspProcessArg::PatchSpace::<DspPatchType, DspHybridType>(Box::new( || {
+    dsp_process.start(DspProcessArg::PatchSpace::<DspPatchType, DspHybridType>(Box::new(move || {
         let path: &str = "/Users/pm/AcaHub/AudioSamples/cane.wav";
-        let buffer = AudioBuffer::new(SR);
-        let mut audio = buffer.to_audio_object(path).unwrap();
+        let mut audio = buffer_clone.lock().unwrap().to_audio_object(path).unwrap();
         audio.set_read_speed(0.5);
         audio.set_read_again(true);
         let mut signal = Vec::new();
@@ -80,7 +85,9 @@ pub fn sigenv_example() {
         }
         signal
     })));
-    std::thread::sleep(std::time::Duration::from_secs_f32(5.0));
+    std::thread::sleep(std::time::Duration::from_secs_f32(1.0));
+
+    AudioBuffer::write_to_file("test", &audio).unwrap();
 
     q.close_qubx();
 }

@@ -8,6 +8,7 @@ Real-Time Parallel Audio Streams Processing and Managment, Dafx24, Surrey UK, 20
 
 - Bug fixes
 - Change Master, Duplex and Dsp Process Type name. See (`ProcessArgs` and `DspProessArg`)
+- New! Add buffers module for audio source reading and writing
 
 >**Version 0.2.1**
 
