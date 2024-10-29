@@ -2,6 +2,10 @@
 name = "qubx"
 version = "0.2.2"
 edition = "2021"
+authors = ["Pasquale Mainolfi <mnlqpl@gmail.com>"]
+license = "MIT"
+description = "Library for managing and processing audio streams in parallel"
+build = "build.rs"
 
 
 [dependencies]
