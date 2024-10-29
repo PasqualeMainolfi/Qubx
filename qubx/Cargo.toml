@@ -3,6 +3,7 @@ name = "qubx"
 version = "0.2.2"
 edition = "2021"
 
+
 [dependencies]
 concurrent-queue = "2.4.0"
 portaudio = "0.8.0"

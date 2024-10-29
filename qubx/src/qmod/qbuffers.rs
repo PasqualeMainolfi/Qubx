@@ -7,7 +7,6 @@ use portaudio::stream::Buffer;
 use std::path::Path;
 use std::fs;
 
-use crate::check_list::ensure_ffmpeg;
 use crate::qubx_common::{ Channels, ChannelError };
 use super::{
     qsignals::SignalObject,
@@ -146,7 +145,6 @@ pub struct AudioBuffer
 impl AudioBuffer
 {
     pub fn new(sr: i32) -> Self {
-        ensure_ffmpeg();
         Self { sr }
     }
 
