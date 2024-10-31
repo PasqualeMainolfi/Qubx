@@ -1,6 +1,6 @@
 [package]
 name = "qubx"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 authors = ["Pasquale Mainolfi <mnlqpl@gmail.com>"]
 license = "MIT"

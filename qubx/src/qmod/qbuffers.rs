@@ -1,20 +1,20 @@
 #![allow(unused)]
 
 use std::default;
-use std::io::{Read, Write};
+use std::io::{ Read, Write };
 use std::process::{ Command, Stdio };
 use portaudio::stream::Buffer;
+use rustfft::Length;
 use std::path::Path;
 use std::fs;
 
-use crate::qubx_common::{ Channels, ChannelError };
+use crate::qubx_common::{ Channels, ChannelError, WriteToFile, ToFileError };
 use super::{
     qsignals::SignalObject,
     qoperations::split_into_nchannels,
-    shared_tools::{ update_increment, update_and_reset_increment, interp_buffer_write },
+    shared_tools::{ update_increment, update_and_reset_increment, interp_buffer_write, write_to_file },
     qinterp::{ Interp, PhaseInterpolationIndex }
 };
-
 
 // pub enum BitSize
 // {
@@ -81,37 +81,102 @@ pub struct AudioObject
     pub(crate) n_samples: usize,
     pub(crate) phase_motion: f32,
     pub(crate) interp_buffer: Vec<f32>,
-    pub(crate) elapsed_time: usize
+    pub(crate) elapsed_time: usize,
+    duration: f32
 }
 
 impl AudioObject
 {
+    /// Create new AudioObject
+    /// 
+    /// # Args
+    /// -----
+    /// 
+    /// `vector_signal`: signal as vector
+    /// `n_channels`: number of channels
+    /// `sr`: sample rate
+    /// 
+    /// 
     pub fn new(vector_signal: Vec<f32>, n_channels: usize, sr: f32) -> Self {
         let n_samples = vector_signal.len() / n_channels;
-        Self { vector_signal, n_channels, sr, read_speed: 1.0, read_offset: 0.0, read_again: false, n_samples, phase_motion: 0.0, interp_buffer: Vec::new(), elapsed_time: 0 }
+        let duration = n_samples as f32 / sr;
+        Self { 
+            vector_signal, 
+            n_channels,
+            sr, read_speed: 1.0, 
+            read_offset: 0.0, 
+            read_again: false, 
+            n_samples, 
+            phase_motion: 0.0, 
+            interp_buffer: Vec::new(), 
+            elapsed_time: 0, 
+            duration, 
+        }
     }
 
+    /// Set read speed 
+    /// 
+    /// # Args
+    /// -----
+    /// 
+    /// `value`: reading speed [0, n]
+    /// 
+    /// 
     pub fn set_read_speed(&mut self, value: f32) {
         self.read_speed = value
     }
 
+    /// Set read offset 
+    /// 
+    /// # Args
+    /// -----
+    /// 
+    /// `value`: offset in samples [0, audio length - 1]
+    /// 
+    /// 
     pub fn set_read_offset(&mut self, time: f32) {
         let phase = (time * self.sr).ceil();
         self.read_offset = phase % self.n_samples as f32
     }
     
+    /// Set read again 
+    /// 
+    /// # Args
+    /// -----
+    /// 
+    /// `value`: read loop. If true read again at the end
+    /// 
     pub fn set_read_again(&mut self, value: bool) {
         self.read_again = value
     }
 
-    pub fn procedural_sampler(&mut self, duration: f32, interp: Interp) -> Result<f32, BufferError> {
-        let sample = if (self.elapsed_time as f32) < self.sr * duration { 
-            AudioBuffer::read_from_audio_object(self, interp).unwrap()
-        } else { 
-            return Err(BufferError::SamplerDataDurationReached) 
-        };
-        self.elapsed_time += 1;
-        Ok(sample)
+    /// Get audio duration
+    /// 
+    /// # Return
+    /// -------
+    /// 
+    /// `f32` duration in sec.
+    /// 
+    pub fn get_duration(&self) -> f32 {
+        self.duration
+    }
+
+    /// Procedural samples
+    /// 
+    /// # Args
+    /// -----
+    /// 
+    /// `duration`: duration in sec  
+    /// `interp`: interpolation mode  
+    /// 
+    /// # Return
+    /// -------
+    /// 
+    /// `Result<f32, BufferError>`
+    /// 
+    /// 
+    pub fn procedural_sampler(&mut self, interp: Interp) -> f32 {
+        AudioBuffer::read_from_audio_object(self, interp).unwrap_or(0.0)
     }
 
     pub(crate) fn update_and_set_pmotion(&mut self, value: f32, table_length: f32) {
@@ -120,6 +185,7 @@ impl AudioObject
     
     pub(crate) fn update_pmotion(&mut self, value: f32) {
         update_increment(&mut self.phase_motion, value);
+        self.phase_motion %= self.vector_signal.len() as f32
     }
 
     pub(crate) fn write_interp_buffer(&mut self, interp: Interp, sample: f32) {
@@ -137,6 +203,13 @@ impl Channels for AudioObject
     }
 }
 
+impl<'a> WriteToFile<'a> for AudioObject
+{
+    fn to_file(&self, name: &'a str) -> Result<(), ToFileError> {
+        write_to_file(name, &self.vector_signal, self.n_channels, self.sr)
+    }
+}
+
 pub struct AudioBuffer
 {
     sr: i32,
@@ -144,10 +217,30 @@ pub struct AudioBuffer
 
 impl AudioBuffer
 {
+    /// Audio buffer
+    /// 
+    /// 
+    /// # Args
+    /// -----
+    /// 
+    /// `sr`: sample rate, must be equal to sample rate passed in `StreamParams`  
+    /// 
     pub fn new(sr: i32) -> Self {
         Self { sr }
     }
 
+    /// Open audio file and convert it into `AudioObject`
+    /// 
+    /// # Args
+    /// -----
+    /// 
+    /// `path`: path to audio file  
+    /// 
+    /// # Result
+    /// -------
+    /// 
+    /// ` Result<AudioObject, BufferError>`
+    /// 
     pub fn to_audio_object(&self, path: &str) -> Result<AudioObject, BufferError> {
         let output = Command::new("ffprobe")
             .arg("-v")
@@ -206,6 +299,19 @@ impl AudioBuffer
         Ok(audiobj)
     }
 
+    /// Read audio file from `AudioObject` sample by sample
+    /// 
+    /// # Args
+    /// -----
+    /// 
+    /// `audio_object`: `AudioObject`  
+    /// `interp`: interpolation mode    
+    /// 
+    /// # Result
+    /// -------
+    /// 
+    /// ` Result<f32, BufferError>`
+    /// 
     fn read_from_audio_object(audio_object: &mut AudioObject, interp: Interp) -> Result<f32, BufferError> {
         if audio_object.read_offset >= audio_object.n_samples as f32 { return Err(BufferError::ReadOffsetGratherThanAudioLength) }
         let phase = audio_object.phase_motion + audio_object.read_offset;
@@ -225,43 +331,197 @@ impl AudioBuffer
         Ok(sample)
     }
 
-    pub fn write_to_file(file_name: &str, audio_object: &AudioObject) -> Result<(), BufferError> {
-        if audio_object.vector_signal.is_empty() { return Err(BufferError::NullOpenFileBufferEmpty) }
-        let mut name: String = file_name.split(".").collect::<Vec<&str>>().join("").to_string();
-        name.push_str(".wav");
-
-        if Path::new(&name).exists() {
-            println!("[INFO] File {} exists, removing and rewriting...", &name); 
-            fs::remove_file(&name).unwrap() 
-        }
-
-        let mut com = Command::new("ffmpeg")
-            .arg("-f")
-            .arg("f32le")
-            .arg("-c:a")
-            .arg("pcm_f32le")
-            .arg("-ac")
-            .arg(audio_object.n_channels.to_string())
-            .arg("-ar")
-            .arg(audio_object.sr.to_string())
-            .arg("-i")
-            .arg("pipe:0")
-            .arg(&name)
-            .stdin(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-            .unwrap();
-        
-        if let Some(stdin) = com.stdin.as_mut() {
-            for sample in audio_object.vector_signal.iter() {
-                stdin.write_all(&sample.to_le_bytes()).unwrap();
-            }
-        }
-
-        let status = com.wait().unwrap();
-        if !status.success() { return Err(BufferError::ErrorInWritingFile) }
-        println!("[INFO] File {} saved!", &name);
-        Ok(())
+    pub fn write_to_file<'a, T: WriteToFile<'a>>(name: &'a str, signal: &'a T) -> Result<(), ToFileError> {
+        signal.to_file(name)
     }
+
 }
 
+#[derive(Debug)]
+pub enum DelayBufferError
+{
+    DelayBufferIndexError,
+    TapLengthMustBeLessThanBufferLength
+}
+
+#[derive(Debug)]
+pub struct DelayBuffer
+{
+    pub delay_length: usize,
+    pub(crate) dbuffer: Vec<f32>,
+    pub(crate) read_index: usize,
+    pub(crate) write_index: usize,
+    pub(crate) tap_cache: Vec<usize>,
+}
+
+impl DelayBuffer 
+{
+    /// Create new delay buffer
+    /// 
+    /// # Args
+    /// -----
+    /// 
+    /// `delay_length`: buffer length in samples  
+    /// 
+    /// 
+    pub fn new(delay_length: usize) -> Self {
+        Self {
+            delay_length,
+            dbuffer: vec![0.0; delay_length],
+            read_index: 0,
+            write_index: 0,
+            tap_cache: Vec::new()
+        }
+    }
+
+    /// Generate delayed feed-forward delayed sample
+    /// 
+    /// # Args
+    /// -----
+    /// 
+    /// `sample`: sample in  
+    /// 
+    /// # Return
+    /// --------
+    /// 
+    /// `f32`: delayed sample
+    /// 
+    pub fn feedforward_delayed_sample(&mut self, sample: f32) -> f32 {
+        let sample_out = self.read_buffer() + self.read_internal_tap();
+        self.write_buffer(sample);
+        sample_out
+    }
+
+    /// Generate delayed feed-back delayed sample
+    /// 
+    /// # Args
+    /// -----
+    /// 
+    /// `sample`: sample in  
+    /// `g`: feed-back gain factor
+    /// 
+    /// # Return
+    /// --------
+    /// 
+    /// `f32`: delayed sample
+    /// 
+    pub fn feedback_delayed_sample(&mut self, sample: f32, g: f32) -> f32 {
+        let sample_out = g * self.read_buffer() + sample;
+        self.write_buffer(sample_out);
+        sample_out + self.read_internal_tap()
+    }
+    
+    /// Generate internal tap sample by sample  
+    /// This method must precede `feedforward_delayed_sample()` or `feedback_delayed_sample()` method.  
+    /// Each tapped sample will be summed internally in a main delay line and putted out a single sample.
+    /// 
+    /// ```rust 
+    /// let mut d = DelayBuffer::new(44100);
+    /// 
+    /// while true {
+    ///     ...generate sample x
+    ///     d.internal_tap(1200).unwrap();
+    ///     d.internal_tap(7000).unwrap();
+    ///     let delayed_sample = d.feedforward_delayed_sample(x);
+    /// }
+    /// ```
+    /// 
+    /// # Args
+    /// -----
+    /// 
+    /// `length`: tap length in samples  
+    /// 
+    /// # Return
+    /// --------
+    /// 
+    /// `Result<(), DelayBufferError>`
+    /// 
+    pub fn internal_tap(&mut self, length: usize) -> Result<(), DelayBufferError> {
+        if length > self.delay_length { return Err(DelayBufferError::TapLengthMustBeLessThanBufferLength) }
+        let tap_index = self.delay_length - length;
+        if !self.tap_cache.contains(&tap_index) { self.tap_cache.push(tap_index) }
+        Ok(())
+    }
+
+    /// Generate external tap sample by sample  
+    /// This method must used in a block `read_buffer()` - `write_buffer()`.  
+    /// Each tap line return an indipendent sample  
+    /// 
+    /// ```rust 
+    /// let mut d = DelayBuffer::new(44100);
+    ///
+    /// while true {
+    ///     ...generate sample x
+    ///     let _ = d.read_buffer();
+    ///     let tap1 = d.external_tap(1200).unwrap_or(0.0);
+    ///     let tap2 = d.external_tap(7000).unwrap_or(0.0);
+    ///     d.write_buffer(x)
+    /// }
+    /// 
+    /// ```
+    /// 
+    /// # Args
+    /// -----
+    /// 
+    /// `length`: tap length in samples  
+    /// 
+    /// # Return
+    /// --------
+    /// 
+    /// `Result<(), DelayBufferError>`
+    /// 
+    pub fn external_tap(&mut self, length: usize) -> Result<f32, DelayBufferError> {
+        if length > self.delay_length { return Err(DelayBufferError::TapLengthMustBeLessThanBufferLength) }
+        let index = (self.delay_length - length) + self.read_index;
+        Ok(self.dbuffer[index % self.delay_length])
+    }
+
+    /// Read delay buffer
+    /// 
+    pub fn read_buffer(&mut self) -> f32 {
+        let sample = self.dbuffer[self.read_index];
+        self.advance_read_index();
+        sample
+    }
+
+    /// Write delay buffer
+    ///
+    /// # Args
+    /// -----
+    /// 
+    /// `sample`: sample in
+    /// 
+    pub fn write_buffer(&mut self, sample: f32) {
+        self.dbuffer[self.write_index] = sample;
+        self.advance_write_index();
+    }
+
+    /// Reset delay buffer
+    ///
+    pub fn reset_buffer(&mut self) {
+        self.dbuffer = vec![0.0; self.delay_length];
+        self.read_index = 0;
+        self.write_index = 0;
+    }
+    
+    fn read_internal_tap(&self) -> f32 {
+        let mut tap_sum = 0.0;
+        if !self.tap_cache.is_empty() {
+            for tap in self.tap_cache.iter() {
+                tap_sum += self.dbuffer[(tap + self.read_index) % self.delay_length];
+            }
+        }
+        tap_sum
+    }
+
+    fn advance_read_index(&mut self) {
+        self.read_index += 1;
+        self.read_index %= self.delay_length;
+    }
+
+    fn advance_write_index(&mut self) {
+        self.write_index += 1;
+        self.write_index %= self.delay_length;
+    }
+
+}

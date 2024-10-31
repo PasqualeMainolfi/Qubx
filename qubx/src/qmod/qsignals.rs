@@ -1,10 +1,30 @@
 #![allow(unused)]
 
 use std::collections::HashMap;
-use crate::qubx_common::{ Channels, ChannelError, SignalOperation };
+use crate::qubx_common::{ 
+    Channels, 
+    ChannelError, 
+    SignalOperation,
+    WriteToFile, 
+    ToFileError 
+};
 use super::{ 
-    qtable::{ TableError, TableMode, TableArg, TableParams }, 
-    shared_tools::{ get_phase_motion, update_and_reset_increment, update_increment, interp_buffer_write, build_signal, build_signal_no_table, get_oscillator_phase },
+    qtable::{ 
+        TableError, 
+        TableMode, 
+        TableArg, 
+        TableParams 
+    }, 
+    shared_tools::{ 
+        get_phase_motion, 
+        update_and_reset_increment, 
+        update_increment, 
+        interp_buffer_write,
+        build_signal, 
+        build_signal_no_table, 
+        get_oscillator_phase,
+        write_to_file 
+    },
     qoperations::split_into_nchannels,
     qinterp::Interp,
 };
@@ -75,7 +95,7 @@ impl SignalOperation for ComplexSignalParams
     fn to_signal_object(&mut self, duration: f32, wave_table: Option<&TableParams>, interp: Option<Interp>) -> SignalObject {
         let signal_length = self.sr * duration;
         let vector_signal = (0..signal_length as usize).map(|_| self.proc_oscillator()).collect::<Vec<f32>>();
-        SignalObject { vector_signal, n_channels: 1 }
+        SignalObject { vector_signal, n_channels: 1, sr: self.sr }
     }
 
     fn get_mode(&self) -> SignalMode {
@@ -159,7 +179,7 @@ impl SignalOperation for SignalParams
                 }
             }
         };
-        SignalObject { vector_signal: sig, n_channels: 1 }
+        SignalObject { vector_signal: sig, n_channels: 1, sr: self.sr}
     }
 
     fn get_mode(&self) -> SignalMode {
@@ -191,6 +211,7 @@ pub struct SignalObject
 {
    pub vector_signal: Vec<f32>,
    pub n_channels: usize,
+   pub sr: f32
 }
 
 impl Channels for SignalObject
@@ -201,6 +222,14 @@ impl Channels for SignalObject
         split_into_nchannels(&mut self.vector_signal, prev_channels, out_channels)
     }
 }
+
+impl<'a> WriteToFile<'a> for SignalObject
+{
+    fn to_file(&self, name: &'a str) -> Result<(), ToFileError> {
+        write_to_file(name, &self.vector_signal, self.n_channels, self.sr)
+    }
+}
+
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SignalMode
@@ -243,7 +272,7 @@ impl QSignal
             TableArg::NoTable => {
                 let n_samples = (duration * signal_params.get_sr()).ceil() as usize;
                 let signal = (0..n_samples).map(|_| QSignal::procedural_oscillator(signal_params)).collect::<Vec<f32>>();
-                SignalObject { vector_signal: signal, n_channels: 1 }
+                SignalObject { vector_signal: signal, n_channels: 1, sr: signal_params.get_sr() }
             }
         };
         Ok(sig)

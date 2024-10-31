@@ -1,8 +1,15 @@
+use std::path::Path;
+use std::process::{ Command, Stdio };
+use std::fs;
+use std::io::Write;
+
 use super::{ 
     qsignals::{ SignalMode, SignalError, SignalParams }, 
     qinterp::{ Interp, PhaseInterpolationIndex },
-    qtable::TableParams, 
+    qtable::TableParams
 };
+
+use crate::qubx_common::ToFileError;
 
 const TWOPI: f32 = 2.0 * std::f32::consts::PI;
 
@@ -101,7 +108,11 @@ pub(crate) fn update_increment(pmotion: &mut f32, value: f32) {
 pub(crate) fn interp_buffer_write(interp_buffer: &mut Vec<f32>, interp: Interp, sample: f32) {
     match interp {
         Interp::NoInterp => {
-            interp_buffer[0] = sample
+            if interp_buffer.is_empty() { 
+                interp_buffer.push(sample) 
+            } else { 
+                interp_buffer[0] = sample 
+            }
         },
         Interp::Linear | Interp::Cosine => {
             if interp_buffer.len() >= 2 { interp_buffer.remove(0); }
@@ -113,3 +124,57 @@ pub(crate) fn interp_buffer_write(interp_buffer: &mut Vec<f32>, interp: Interp, 
         }
     }
 }
+
+// ----
+
+/// Write audio file to file
+    /// 
+    /// # Args
+    /// -----
+    /// 
+    /// `file_name`: output file name  
+    /// `audio_object`: audio file as `AudioObject`    
+    /// 
+    /// # Result
+    /// -------
+    /// 
+    /// ` Result<(), BufferError>`
+    /// 
+    pub(crate) fn write_to_file(file_name: &str, vector_signal: &[f32], n_channels: usize, sr: f32) -> Result<(), ToFileError> {
+        if vector_signal.is_empty() { return Err(ToFileError::SignalIsEmpty) }
+        let mut name: String = file_name.split(".").collect::<Vec<&str>>().join("").to_string();
+        name.push_str(".wav");
+
+        if Path::new(&name).exists() {
+            println!("[INFO] File {} exists, removing and rewriting...", &name); 
+            fs::remove_file(&name).unwrap() 
+        }
+
+        let mut com = Command::new("ffmpeg")
+            .arg("-f")
+            .arg("f32le")
+            .arg("-c:a")
+            .arg("pcm_f32le")
+            .arg("-ac")
+            .arg(n_channels.to_string())
+            .arg("-ar")
+            .arg(sr.to_string())
+            .arg("-i")
+            .arg("pipe:0")
+            .arg(&name)
+            .stdin(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        
+        if let Some(stdin) = com.stdin.as_mut() {
+            for sample in vector_signal.iter() {
+                stdin.write_all(&sample.to_le_bytes()).unwrap();
+            }
+        }
+
+        let status = com.wait().unwrap();
+        if !status.success() { return Err(ToFileError::WritingError) }
+        println!("[INFO] File {} saved!", &name);
+        Ok(())
+    }

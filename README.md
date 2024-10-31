@@ -4,6 +4,12 @@ Qubx is a Rust library for managing and processing audio streams in parallel.
 Related paper: P. Mainolfi, Qubx: a Rust Library for Queue-Based Multithreaded
 Real-Time Parallel Audio Streams Processing and Managment, Dafx24, Surrey UK, 2024.  
 
+>**Version 0.2.3**
+
+- Bug fixes
+- Add possibility to export `SignalObject` as audio file. Now, it is possible to pass to `AudioBuffer::write_to_file()` objects that implements `WriteToFile` trait
+- New! Add `DelayBuffer` in `qbuffers` module. This object allows you to create delay lines and complex delay blocks
+
 >**Version 0.2.2**
 
 - Bug fixes

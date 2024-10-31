@@ -84,5 +84,5 @@ pub fn envelope_to_signal(signal: &SignalObject, envelope: &EnvelopeObject) -> R
         .map(|(s, e)| s * e)
         .collect::<Vec<f32>>();
 
-    Ok(SignalObject { vector_signal: enveloped_signal, n_channels: signal.n_channels })
+    Ok(SignalObject { vector_signal: enveloped_signal, n_channels: signal.n_channels, sr: signal.sr })
 }

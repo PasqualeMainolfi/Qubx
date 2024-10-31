@@ -7,11 +7,11 @@ use qubx::{
     DspPatchType, 
     MasterPatchType,
     qinterp::Interp,
+    qoperations::envelope_to_signal,
     qsignals::{ QSignal, SignalMode, SignalParams, ComplexSignalParams },
     qenvelopes::{ QEnvelope, EnvParams, EnvMode },
-    qoperations::envelope_to_signal,
     qtable::{ QTable, TableMode, TableArg },
-    qbuffers::AudioBuffer,
+    qbuffers::{ AudioBuffer, DelayBuffer },
 };
 
 use std::sync::{ Arc, Mutex };
@@ -67,8 +67,8 @@ pub fn sigenv_example() {
     std::thread::sleep(std::time::Duration::from_secs_f32(1.5));
     
     // let buffer = AudioBuffer::new(SR);
-    let buffer = Arc::new(Mutex::new(AudioBuffer::new(SR)));
-    let buffer_clone = Arc::clone(&buffer);
+    let buffer_audio = Arc::new(Mutex::new(AudioBuffer::new(SR)));
+    let buffer_clone = Arc::clone(&buffer_audio);
     let path: &str = "/Users/pm/AcaHub/AudioSamples/cane.wav";
     let audio = buffer_clone.lock().unwrap().to_audio_object(path).unwrap();
     dsp_process.start(DspProcessArg::Source::<DspPatchType, DspHybridType>(audio.vector_signal.clone()));
@@ -80,14 +80,51 @@ pub fn sigenv_example() {
         audio.set_read_speed(0.5);
         audio.set_read_again(true);
         let mut signal = Vec::new();
-        while let Ok(sample) = audio.procedural_sampler(2.5, Interp::Cubic) {
+        let duration = 3.0;
+        let mut timer = 1.0;
+        loop {
+            let sample = audio.procedural_sampler(Interp::Cubic);
             signal.push(sample);
+            if timer >= duration * SR as f32 { break }
+            timer += 1.0;
         }
         signal
     })));
-    std::thread::sleep(std::time::Duration::from_secs_f32(1.0));
+    std::thread::sleep(std::time::Duration::from_secs_f32(3.0));
 
     AudioBuffer::write_to_file("test", &audio).unwrap();
+
+    let buffer_audio_delay = Arc::clone(&buffer_audio);
+    dsp_process.start(DspProcessArg::PatchSpace::<DspPatchType, DspHybridType>(Box::new(move || {
+        let path: &str = "/Users/pm/AcaHub/AudioSamples/cane.wav";
+        let mut audio = buffer_audio_delay.lock().unwrap().to_audio_object(path).unwrap();
+        let mut signal = Vec::new();
+
+        let mut dbuffer = DelayBuffer::new((1.0 * audio.sr) as usize);
+        let duration = 5.0;
+        let mut timer = 1.0;
+        loop {
+            let sample = audio.procedural_sampler(Interp::NoInterp);
+            let delayed_sample = dbuffer.feedback_delayed_sample(sample, 0.78);
+            signal.push(delayed_sample + sample);
+            if timer >= (duration * SR as f32) { break }
+            timer += 1.0;
+        }
+        
+        audio.set_read_again(true);
+        timer = 0.0;
+        loop {
+            let sample = audio.procedural_sampler(Interp::NoInterp);
+            dbuffer.internal_tap((0.5 * audio.sr) as usize).unwrap();
+            dbuffer.internal_tap((0.1 * audio.sr) as usize).unwrap();
+            let delayed_sample = dbuffer.feedforward_delayed_sample(sample);
+            signal.push(delayed_sample + sample);
+            if timer >= (duration * SR as f32) { break }
+            timer += 1.0;
+        }
+        signal
+    })));
+    std::thread::sleep(std::time::Duration::from_secs_f32(5.0));
 
     q.close_qubx();
 }
