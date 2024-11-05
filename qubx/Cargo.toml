@@ -1,6 +1,6 @@
 [package]
 name = "qubx"
-version = "0.2.3"
+version = "0.3.0"
 edition = "2021"
 authors = ["Pasquale Mainolfi <mnlqpl@gmail.com>"]
 license = "MIT"
@@ -10,7 +10,11 @@ build = "build.rs"
 
 [dependencies]
 concurrent-queue = "2.4.0"
+geo = "0.29.1"
+nalgebra = "0.33.2"
+num-traits = "0.2.19"
 portaudio = "0.8.0"
 rayon = "1.10.0"
 realfft = "3.4.0"
 rustfft = "6.2.0"
+statistical = "1.0.0"

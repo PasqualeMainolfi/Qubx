@@ -4,6 +4,12 @@ Qubx is a Rust library for managing and processing audio streams in parallel.
 Related paper: P. Mainolfi, Qubx: a Rust Library for Queue-Based Multithreaded
 Real-Time Parallel Audio Streams Processing and Managment, Dafx24, Surrey UK, 2024.  
 
+>**Version 0.3.0**
+
+- Bug fixes
+- Add `mtof`, `ftom`, `atodb`, `dbtoa` and `degtorad`, `radtodeg`, `cartopol` and `poltocar` macro in `qoperations` mod
+- New! Add `qspaces` module. This module allows you to manage simple stereo pan (linear, costant power and compromise), VBAP (using line-line intersection) and DBAP technique.
+
 >**Version 0.2.3**
 
 - Bug fixes
@@ -14,22 +20,22 @@ Real-Time Parallel Audio Streams Processing and Managment, Dafx24, Surrey UK, 20
 
 - Bug fixes
 - Change Master, Duplex and Dsp Process Type name. See (`ProcessArgs` and `DspProessArg`)
-- New! Add buffers module for audio source reading and writing
+- New! Add `qbuffers` module for audio source reading and writing
 
 >**Version 0.2.1**
 
 - Bug fixes
 - Optimization of signals and envelope modules
-- New! Add table module. This module allows you to write and read tables
+- New! Add `qtable` module. This module allows you to write and read tables
 
 >**Version 0.2.0**
 
 - Prepare Qubx to receive modules
-- New! Add signals module. This module allows you to generate raw signals (Sine, Saw, Triangle, Square, Phasor, Pulse)
-- New! Add envelopes module. This module allows you to create and generate envelope shapes
-- New! Add interp module. This module allows you to implement Linear, Cubic and Hermite interpolation
-- New! Add convolution module. This methos allows you to use inside, outside and fft convolution
-- Add qubx types module
+- New! Add `qsignals` module. This module allows you to generate raw signals (Sine, Saw, Triangle, Square, Phasor, Pulse)
+- New! Add `qenvelopes` module. This module allows you to create and generate envelope shapes
+- New! Add `qinterp` module. This module allows you to implement Linear, Cubic and Hermite interpolation
+- New! Add `qconvolution` module. This methos allows you to use inside, outside and fft convolution
+- Add `qubx_types` module
 - Changed the way arguments are passed to the `.start()` function on Matser, Duples and Dsp Process. Now you can use
 `ProcessArg` for Master and Duplex and `DspProcessArgs` for DspProcess
 
