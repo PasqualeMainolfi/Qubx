@@ -14,16 +14,19 @@ mod qmod {
     pub mod qtable;
     pub mod shared_tools;
     pub mod qspaces;
+    pub mod qanalysis;
+    pub mod qwindow;
+    pub mod macros;
+    pub mod filters;
+    pub mod qfilters;
+    pub mod qgenesis;
+    pub mod genesis;
 }
 
 // --- PUB USE ---
 
 pub use qubx::Qubx;
-pub use qubx_common::{ 
-    StreamParameters, 
-    ProcessArg, 
-    DspProcessArg, 
-};
+pub use qubx_common::{ StreamParameters, ProcessArg, DspProcessArg };
 pub use qubx_components::*;
 pub use qmod::qenvelopes;
 pub use qmod::qsignals;
@@ -34,3 +37,10 @@ pub use qmod::qbuffers;
 pub use qmod::qoperations;
 pub use qmod::qtable;
 pub use qmod::qspaces;
+pub use qmod::qanalysis;
+pub use qmod::qwindow;
+pub use qmod::macros;
+pub use qmod::qfilters;
+pub use qmod::filters::filtertype;
+pub use qmod::qgenesis;
+pub use qmod::genesis::genesis_params;

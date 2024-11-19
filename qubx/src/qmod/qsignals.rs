@@ -1,16 +1,19 @@
 #![allow(unused)]
 
-use std::collections::HashMap;
+use rand::{ rngs::ThreadRng, thread_rng };
+use rand_distr::Uniform;
+use super::{ qbuffers::ReadBufferDirection, shared_tools::{get_oscillator_phase_data_vec, interp_buffer_write_from_table} };
+
 use crate::qubx_common::{ 
     Channels, 
     ChannelError, 
     SignalOperation,
     WriteToFile, 
-    ToFileError 
+    ToFileError,
+    TimeDomainFloat
 };
 use super::{ 
     qtable::{ 
-        TableError, 
         TableMode, 
         TableArg, 
         TableParams 
@@ -19,7 +22,6 @@ use super::{
         get_phase_motion, 
         update_and_reset_increment, 
         update_increment, 
-        interp_buffer_write,
         build_signal, 
         build_signal_no_table, 
         get_oscillator_phase,
@@ -38,7 +40,8 @@ pub enum SignalError
     SignalModeNotAllowedInLookUpOscillator,
     SignalModeAndTableModeMustBeTheSame,
     TableModeNotAllowedForSignal,
-    InterpModeNotAllowed
+    InterpModeNotAllowed,
+    SomethingWentWrongInNoiseGeneration
 }
 
 /// Signal Component
@@ -79,7 +82,6 @@ impl ComplexSignalParams
 impl SignalOperation for ComplexSignalParams
 {
     fn proc_oscillator(&mut self) -> f32 {
-        let n = self.freqs.len();
         let sample = self.freqs
             .iter()
             .zip(self.amps.iter()
@@ -125,8 +127,29 @@ pub struct SignalParams
     pub amp: f32,
     pub phase_offset: f32,
     pub sr: f32,
+    pub read_direction_vec: ReadBufferDirection,
     pub(crate) phase_motion: f32,
-    pub(crate) interp_buffer: Vec<f32>
+    pub(crate) interp_buffer: Vec<f32>,
+    pub(crate) noise_tools: Option<(ThreadRng, Uniform<f32>)>,
+    pub(crate) t: f32
+}
+
+impl Default for SignalParams
+{
+    fn default() -> Self {
+        Self {
+            mode: SignalMode::Sine,
+            freq: 440.0,
+            amp: 1.0,
+            phase_offset: 0.0,
+            sr: 44100.0,
+            read_direction_vec: ReadBufferDirection::Forward,
+            phase_motion: 0.0,
+            interp_buffer: Vec::new(),
+            noise_tools: None,
+            t: 0.0
+        }
+    }
 }
 
 impl SignalParams
@@ -135,36 +158,50 @@ impl SignalParams
     /// 
     /// 
     pub fn new(mode: SignalMode, freq: f32, amp: f32, phase_offset: f32, sr: f32) -> Self {
+        let noise_tools = if mode == SignalMode::WhiteNoise {
+            let distr = Uniform::<f32>::new(-1.0, 1.0);
+            let noise_gen = thread_rng(); 
+            Some((noise_gen, distr)) 
+        } else { 
+            None
+        };
+
         Self {
             mode,
             freq,
             amp,
             phase_offset,
             sr,
-            phase_motion: 0.0,
-            interp_buffer: Vec::new(),
+            ..Default::default()
         }
     }
 
     pub(crate) fn update_and_set_pmotion(&mut self, value: f32, table_length: f32) {
-        update_and_reset_increment(&mut self.phase_motion, value, table_length);
+        update_and_reset_increment(&mut self.phase_motion, value, table_length, self.read_direction_vec);
     }
     
     pub(crate) fn update_pmotion(&mut self, value: f32) {
         update_increment(&mut self.phase_motion, value);
+        self.phase_motion %= 1.0 // Important!
     }
 
-    pub(crate) fn write_interp_buffer(&mut self, interp: Interp, sample: f32) {
-        interp_buffer_write(&mut self.interp_buffer, interp, sample);
+    pub(crate) fn write_interp_buffer_from_table(&mut self, interp: Interp, table: &[f32], index: usize) {
+        interp_buffer_write_from_table(&mut self.interp_buffer, interp, table, index);
     }
+
+    pub(crate) fn reset_signal_history(&mut self) {
+        self.phase_motion = 0.0;
+        self.interp_buffer = Vec::new();
+    }
+
 }
 
 impl SignalOperation for SignalParams
 {
     fn proc_oscillator(&mut self) -> f32 {
-        let sample = get_phase_motion(self.phase_motion, self.freq, self.amp, self.phase_offset, self.sr, &self.mode);
-        self.update_pmotion(1.0);
-        sample.unwrap()
+        let sample = get_phase_motion(self.phase_motion, &self.mode, &mut self.noise_tools);
+        self.update_pmotion(self.freq / self.sr + self.phase_offset);
+        sample.unwrap() * self.amp
     }
 
     fn to_signal_object(&mut self, duration: f32, wave_table: Option<&TableParams>, interp: Option<Interp>) -> SignalObject {
@@ -192,21 +229,7 @@ impl SignalOperation for SignalParams
 
 }
 
-impl Default for SignalParams
-{
-    fn default() -> Self {
-        Self {
-            mode: SignalMode::Sine,
-            freq: 440.0,
-            amp: 1.0,
-            phase_offset: 0.0,
-            sr: 44100.0,
-            phase_motion: 0.0,
-            interp_buffer: Vec::new()
-        }
-    }
-}
-
+#[derive(Debug, Clone)]
 pub struct SignalObject
 {
    pub vector_signal: Vec<f32>,
@@ -220,6 +243,17 @@ impl Channels for SignalObject
         let prev_channels = self.n_channels;
         self.n_channels = out_channels;
         split_into_nchannels(&mut self.vector_signal, prev_channels, out_channels)
+    }
+}
+
+impl TimeDomainFloat for SignalObject
+{
+    fn get_vector(&self) -> &Vec<f32> {
+        &self.vector_signal
+    }
+
+    fn get_n_channels(&self) -> usize {
+        self.n_channels
     }
 }
 
@@ -240,7 +274,9 @@ pub enum SignalMode
     Square,
     Phasor,
     Pulse(f32),
-    ComplexSignal
+    ComplexSignal,
+    WhiteNoise,
+    DataVec
 }
 
 pub struct QSignal { }
@@ -265,8 +301,8 @@ impl QSignal
         let sig = match table {
             TableArg::WithTable((table, interp)) => {
                 match table.mode {
-                    TableMode::Signal(sig_mode) => signal_params.to_signal_object(duration, Some(table), Some(interp)),
-                    TableMode::Envelope(_) => { return Err(SignalError::TableModeNotAllowedForSignal) }
+                    TableMode::Signal(_) => signal_params.to_signal_object(duration, Some(table), Some(interp)),
+                    TableMode::Envelope(_) | TableMode::EnvelopeData(_) | TableMode::Data(_) => return Err(SignalError::TableModeNotAllowedForSignal)
                 }
             }
             TableArg::NoTable => {
@@ -318,7 +354,8 @@ impl QSignal
                     return Err(SignalError::SignalModeAndTableModeMustBeTheSame)
                 }
             },
-            TableMode::Envelope(_) => return Err(SignalError::TableModeNotAllowedForSignal)
+            TableMode::Data(_) => get_oscillator_phase_data_vec(table, signal_params, interp), // sr must be 1.0
+            TableMode::Envelope(_) | TableMode::EnvelopeData(_) => return Err(SignalError::TableModeNotAllowedForSignal),
         };
         Ok(sample)
     }

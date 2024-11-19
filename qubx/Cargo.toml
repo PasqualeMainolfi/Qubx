@@ -1,6 +1,6 @@
 [package]
 name = "qubx"
-version = "0.3.0"
+version = "0.5.0"
 edition = "2021"
 authors = ["Pasquale Mainolfi <mnlqpl@gmail.com>"]
 license = "MIT"
@@ -14,7 +14,10 @@ geo = "0.29.1"
 nalgebra = "0.33.2"
 num-traits = "0.2.19"
 portaudio = "0.8.0"
+rand = "0.8.5"
+rand_distr = "0.4.3"
 rayon = "1.10.0"
 realfft = "3.4.0"
+rustdct = "0.7.1"
 rustfft = "6.2.0"
 statistical = "1.0.0"

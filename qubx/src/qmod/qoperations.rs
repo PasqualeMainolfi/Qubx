@@ -1,7 +1,7 @@
-#![allow(unused)]
+// #![allow(unused)]
 
 use num_traits::Float;
-use rustfft::num_traits::sign;
+use rustfft::num_complex::Complex;
 
 use crate::qubx_common::ChannelError;
 use super::{
@@ -9,12 +9,18 @@ use super::{
     qenvelopes::{ 
         EnvelopeObject, 
         EnvelopeError 
-    },
-    qspaces::{ 
-        PolarPoint,
-        CartesianPoint
     }
 };
+
+
+pub struct ComplexNum { }
+
+impl ComplexNum
+{
+    pub fn new_complex<T>(re: T, im: T) -> Complex<T> {
+        Complex { re, im }
+    } 
+}
 
 /// Split signal into n-channels  
 /// 
@@ -36,18 +42,28 @@ pub fn split_into_nchannels(input: &mut Vec<f32>, in_channels: usize, out_channe
     if input.is_empty() { return Err(ChannelError::VectorIsEmpty) }
     if in_channels == 0 { return Err(ChannelError::ChannelNumbersError) }
     
-    let mut new_sig = Vec::new();
-    for i in (0..input.len()).step_by(in_channels) {
-        if i + in_channels < input.len() {
+    if in_channels != out_channels {
+        let mut new_sig = Vec::new();
+        for i in (0..input.len()).step_by(in_channels) {
+            let segment = &input[i..i + in_channels];
             for j in 0..out_channels {
-                let start = j * in_channels / out_channels;
-                let end = (j + 1) * in_channels / out_channels;
-                let sample: f32 = input[start..end].iter().sum();
-                new_sig.push(sample / (end - start) as f32)
+                let sample = if in_channels == 1 {
+                    segment[0]
+                } else {
+                    let ratio = (j as f32) / (out_channels as f32 - 1.0);
+                    let interpolated_sample = segment
+                        .iter()
+                        .zip((0..in_channels).map(|k| k as f32 / (in_channels as f32 - 1.0)))
+                        .map(|(sample, pos)| sample * (1.0 - (pos - ratio).abs()))
+                        .sum::<f32>();
+                    interpolated_sample
+                };
+                new_sig.push(sample / out_channels as f32);
             }
         }
+        *input = new_sig;
+        return Ok(())
     }
-    *input = new_sig;
     Ok(())
 }
 
@@ -76,14 +92,12 @@ pub fn envelope_to_signal(signal: &SignalObject, envelope: &EnvelopeObject) -> R
 
     match slen {
         m if m > elen => {
-            for i in 0..(slen - elen) {
-                env.push(envelope.vector_envelope[elen - 1])
-            }
+            env = vec![envelope.vector_envelope[elen - 1]; slen];
+            env[..elen].copy_from_slice(&envelope.vector_envelope)
         },
         m if m < elen => {
-            for i in 0..(elen - slen) {
-                sig.push(0.0);
-            }
+            sig = vec![0.0; elen];
+            sig[..slen].copy_from_slice(&signal.vector_signal)
         }
         _ => { }
     }
@@ -102,164 +116,11 @@ pub fn precision_float<T: Float>(value: T, n_decimals: i32) -> T {
     (value * f).round() / f
 }
 
-/// Midi to Frequency
-/// 
-/// # Args
-/// -----
-/// 
-/// `value`: midi value
-/// 
-/// # Return
-/// --------
-/// 
-/// `f32`
-/// 
-#[macro_export]
-macro_rules! mtof {
-    (&midi:expr) => {{
-        let m = $midi.abs();
-        440.0 * ((m - 69.0) / 12.0).powi(2)
-    }};
-}
+// ---
 
-/// Frequency to Midi
-/// 
-/// # Args
-/// -----
-/// 
-/// `value`: frequency value in Hz
-/// 
-/// # Return
-/// --------
-/// 
-/// `f32`
-/// 
-#[macro_export]
-macro_rules! ftom {
-    (&freq:expr) => {{
-        let f = $freq.abs();
-        (12.0 * (f / 440.0).log2() + 69.0).floor()
-    }};
+pub fn vector_zero_padding<T: Float>(x: &[T], length: usize) -> Vec<T> {
+    let mut padded = Vec::<T>::with_capacity(length);
+    padded.copy_from_slice(x);
+    padded
 }
-
-/// Amp to dB
-/// 
-/// # Args
-/// -----
-/// 
-/// `value`: amp value
-/// 
-/// # Return
-/// --------
-/// 
-/// `f32`
-/// 
-#[macro_export]
-macro_rules! atodb {
-    (&amp:expr) => {
-        (&amp / 20.0).powi(10)
-    };
-}
-
-/// dB to amp
-/// 
-/// # Args
-/// -----
-/// 
-/// `value`: dB value
-/// 
-/// # Return
-/// --------
-/// 
-/// `f32`
-///  
-#[macro_export]
-macro_rules! dbtoa {
-    (&db:expr) => {
-        (&db / 20.0).powi(10)    
-    };
-}
-
-/// From degree to rad
-/// 
-/// # Args
-/// -----
-/// 
-/// `value`: degree value
-/// 
-/// # Return
-/// --------
-/// 
-/// `f32`
-///  
-#[macro_export]
-macro_rules! degtorad {
-    ($degree:expr) => {
-        $degree * std::f64::consts::PI / 180.0
-    };
-}
-
-/// From rad to degree
-/// 
-/// # Args
-/// -----
-/// 
-/// `value`: rad value
-/// 
-/// # Return
-/// --------
-/// 
-/// `f32`
-///  
-#[macro_export]
-macro_rules! radtodeg {
-    ($rad:expr) => {
-        $rad * 180.0 / std::f64::consts::PI
-    };
-}
-
-/// Make degree in a range from [0, pi]
-/// 
-/// # Args
-/// -----
-/// 
-/// `value`: degree value
-/// 
-/// # Return
-/// --------
-/// 
-/// `f32`
-///  
-#[macro_export]
-macro_rules! clamp_angle {
-    ($deg:expr) => {{
-        if $deg > 180.0 { $deg - 360.0 } else { $deg }
-    }};
-}
-
-#[macro_export]
-macro_rules! cartopol {
-    ($car:expr) => {{
-        let r = ($car.x * $car.x + $car.y * $car.y).sqrt();
-        let theta = $car.y.atan2($car.x);
-        PolarPoint { r, theta }
-    }};
-}
-
-#[macro_export]
-macro_rules! poltocar {
-    ($pol:expr) => {{
-        let x = $pol.r * $pol.theta.cos();
-        let y = $pol.r * $pol.theta.sin();
-        CartesianPoint { x, y }
-    }};
-}
-
-#[macro_export]
-macro_rules! scale_in_range {
-    ($angle:expr, $in_min:expr, $in_max:expr, $out_min:expr, $out_max:expr) => {{
-        $out_min + (($angle - $in_min) / ($in_max - $in_min)) * ($out_max - $out_min)
-    }};
-}
-
 

@@ -4,6 +4,9 @@
 /examples/qubx_example/target
 TODO.md
 
+
+*.wav
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 .pytest_cache/

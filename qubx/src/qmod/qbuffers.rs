@@ -1,19 +1,14 @@
 #![allow(unused)]
 
-use std::default;
-use std::io::{ Read, Write };
-use std::process::{ Command, Stdio };
-use portaudio::stream::Buffer;
-use rustfft::Length;
-use std::path::Path;
-use std::fs;
+use std::{
+    borrow::BorrowMut, io::Read, process::{ Command, Stdio }, sync::{ Arc, RwLock }
+};
 
-use crate::qubx_common::{ Channels, ChannelError, WriteToFile, ToFileError };
+use portaudio::stream::Buffer;
+
+use crate::qubx_common::{ Channels, ChannelError, WriteToFile, ToFileError, TimeDomainFloat };
 use super::{
-    qsignals::SignalObject,
-    qoperations::split_into_nchannels,
-    shared_tools::{ update_increment, update_and_reset_increment, interp_buffer_write, write_to_file },
-    qinterp::{ Interp, PhaseInterpolationIndex }
+    qinterp::{ Interp, PhaseInterpolationIndex }, qoperations::split_into_nchannels, shared_tools::{ interp_buffer_write_from_table, update_and_reset_increment, update_increment, write_to_file }
 };
 
 // pub enum BitSize
@@ -66,8 +61,17 @@ pub enum BufferError
     ReadOffsetGratherThanAudioLength,
     SamplerDataDurationReached,
     WriteFormatNotValid,
-    ErrorInWritingFile
+    ErrorInWritingFile,
+    SasmpleRateIsZeroHaveToSet
 }
+
+#[derive(Debug, Clone, Copy)]
+pub enum ReadBufferDirection
+{
+    Forward,
+    Backward
+}
+
 
 #[derive(Debug)]
 pub struct AudioObject
@@ -78,11 +82,30 @@ pub struct AudioObject
     pub(crate) read_speed: f32,
     pub(crate) read_offset: f32,
     pub(crate) read_again: bool,
+    pub(crate) read_direction: ReadBufferDirection,
     pub(crate) n_samples: usize,
     pub(crate) phase_motion: f32,
     pub(crate) interp_buffer: Vec<f32>,
-    pub(crate) elapsed_time: usize,
     duration: f32
+}
+
+impl Default for AudioObject
+{
+    fn default() -> Self {
+        Self { 
+            vector_signal: Vec::new(),
+            n_channels: 0,
+            sr: 0.0,
+            read_speed: 1.0, 
+            read_offset: 0.0, 
+            read_again: false,
+            read_direction: ReadBufferDirection::Forward, 
+            n_samples: 0, 
+            phase_motion: 0.0, 
+            interp_buffer: Vec::new(), 
+            duration: 0.0, 
+        }
+    }
 }
 
 impl AudioObject
@@ -105,13 +128,48 @@ impl AudioObject
             n_channels,
             sr, read_speed: 1.0, 
             read_offset: 0.0, 
-            read_again: false, 
+            read_again: false,
+            read_direction: ReadBufferDirection::Forward, 
             n_samples, 
             phase_motion: 0.0, 
             interp_buffer: Vec::new(), 
-            elapsed_time: 0, 
             duration, 
         }
+    }
+
+    /// Add audio data  
+    /// 
+    /// # Args
+    /// -----
+    /// 
+    /// `audio_data`: audio data vector  
+    /// `n_channels`: number of channels  
+    /// 
+    /// 
+    /// # Return  
+    /// 
+    /// `Result<(), BufferError>`
+    /// 
+    pub fn add_audio_data(&mut self, audio_data: Vec<f32>, n_channels: usize, sr: f32) {
+        self.sr = sr;
+        let n_samples = audio_data.len() / n_channels;
+        let duration = n_samples as f32 / self.sr;
+        self.n_samples = n_samples;
+        self.n_channels = n_channels;
+        self.vector_signal = audio_data;
+        self.duration = self.n_samples as f32 / self.sr;
+    }
+
+    /// Set sample rate 
+    /// 
+    /// # Args
+    /// -----
+    /// 
+    /// `value`: sample rate in Hz  
+    /// 
+    /// 
+    pub fn set_sr(&mut self, value: f32) {
+        self.sr = value
     }
 
     /// Set read speed 
@@ -135,7 +193,7 @@ impl AudioObject
     /// 
     /// 
     pub fn set_read_offset(&mut self, time: f32) {
-        let phase = (time * self.sr).ceil();
+        let phase = (time * self.sr).floor();
         self.read_offset = phase % self.n_samples as f32
     }
     
@@ -148,6 +206,21 @@ impl AudioObject
     /// 
     pub fn set_read_again(&mut self, value: bool) {
         self.read_again = value
+    }
+    
+    /// Set buffer reading direction 
+    /// 
+    /// # Args
+    /// -----
+    /// 
+    /// `direction`: direction of reading as `BufferReadingDirection`   
+    /// 
+    pub fn set_read_direction(&mut self, direction: ReadBufferDirection) {
+        match direction {
+            ReadBufferDirection::Forward => self.phase_motion = 0.0,
+            ReadBufferDirection::Backward => self.phase_motion = self.vector_signal.len() as f32 - 1.0
+        }
+        self.read_direction = direction
     }
 
     /// Get audio duration
@@ -180,16 +253,28 @@ impl AudioObject
     }
 
     pub(crate) fn update_and_set_pmotion(&mut self, value: f32, table_length: f32) {
-        update_and_reset_increment(&mut self.phase_motion, value, table_length);
+        update_and_reset_increment(&mut self.phase_motion, value, table_length, self.read_direction);
     }
     
     pub(crate) fn update_pmotion(&mut self, value: f32) {
         update_increment(&mut self.phase_motion, value);
-        self.phase_motion %= self.vector_signal.len() as f32
+        match self.read_direction {
+            ReadBufferDirection::Forward => self.phase_motion %= self.vector_signal.len() as f32,
+            ReadBufferDirection::Backward => {
+                if self.phase_motion < 0.0 {
+                    self.phase_motion = self.vector_signal.len() as f32 - 1.0
+                }
+            }
+        }
     }
 
-    pub(crate) fn write_interp_buffer(&mut self, interp: Interp, sample: f32) {
-        interp_buffer_write(&mut self.interp_buffer, interp, sample);
+    pub(crate) fn write_interp_buffer_from_table(&mut self, interp: Interp, table: &[f32], index: usize) {
+        interp_buffer_write_from_table(&mut self.interp_buffer, interp, table, index);
+    }
+
+    pub(crate) fn reset_audio_object_history(&mut self) {
+        self.phase_motion = 0.0;
+        self.interp_buffer = Vec::new();
     }
 
 }
@@ -200,6 +285,17 @@ impl Channels for AudioObject
         let prev_channels = self.n_channels;
         self.n_channels = out_channels;
         split_into_nchannels(&mut self.vector_signal, prev_channels, out_channels)
+    }
+}
+
+impl TimeDomainFloat for AudioObject
+{
+    fn get_vector(&self) -> &Vec<f32> {
+        &self.vector_signal
+    }
+    
+    fn get_n_channels(&self) -> usize {
+        self.n_channels
     }
 }
 
@@ -295,7 +391,7 @@ impl AudioBuffer
             Vec::from(slice_buffer)
         };
 
-        let mut audiobj = AudioObject::new(samples, cn as usize, self.sr as f32);
+        let audiobj = AudioObject::new(samples, cn as usize, self.sr as f32);
         Ok(audiobj)
     }
 
@@ -312,11 +408,10 @@ impl AudioBuffer
     /// 
     /// ` Result<f32, BufferError>`
     /// 
-    fn read_from_audio_object(audio_object: &mut AudioObject, interp: Interp) -> Result<f32, BufferError> {
-        if audio_object.read_offset >= audio_object.n_samples as f32 { return Err(BufferError::ReadOffsetGratherThanAudioLength) }
-        let phase = audio_object.phase_motion + audio_object.read_offset;
+    pub fn read_from_audio_object(audio_object: &mut AudioObject, interp: Interp) -> Result<f32, BufferError> {
+        let phase = (audio_object.phase_motion + audio_object.read_offset) % audio_object.n_samples as f32;
 
-        if audio_object.read_again { 
+        if audio_object.read_again {
             audio_object.update_and_set_pmotion(audio_object.read_speed, audio_object.n_samples as f32 - audio_object.read_offset);
         } else {
             audio_object.update_pmotion(audio_object.read_speed);
@@ -326,13 +421,76 @@ impl AudioBuffer
         let table_index = PhaseInterpolationIndex::new(phase);
         let index_int = table_index.int_part;
         let frac_part = table_index.frac_part;
-        audio_object.write_interp_buffer(interp, audio_object.vector_signal[index_int]);
+        audio_object.write_interp_buffer_from_table(interp, &audio_object.vector_signal.to_vec(), index_int);
         let sample = interp.get_table_interpolation(frac_part, &audio_object.interp_buffer).unwrap();
         Ok(sample)
     }
 
     pub fn write_to_file<'a, T: WriteToFile<'a>>(name: &'a str, signal: &'a T) -> Result<(), ToFileError> {
         signal.to_file(name)
+    }
+
+}
+
+
+#[derive(Debug)]
+pub struct DataBuffer
+{
+    pub length: usize,
+    pub(crate) buffer: Vec<f32>,
+    pub(crate) read_index: usize,
+    pub(crate) write_index: usize,
+}
+
+impl Default for DataBuffer
+{
+    fn default() -> Self {
+        Self { length: 1024, buffer: Vec::with_capacity(1024), read_index: 0, write_index: 0 }
+    }
+}
+
+impl DataBuffer
+{
+    pub fn new(length: usize) -> Self {
+        Self { length, buffer: vec![0.0; length], ..Default::default() }
+    }
+
+    /// Read delay buffer
+    /// 
+    pub fn read_buffer(&mut self) -> f32 {
+        let sample = self.buffer[self.read_index];
+        self.advance_read_index();
+        sample
+    }
+
+    /// Write delay buffer
+    ///
+    /// # Args
+    /// -----
+    /// 
+    /// `sample`: sample in
+    /// 
+    pub fn write_buffer(&mut self, sample: f32) {
+        self.buffer[self.write_index] = sample;
+        self.advance_write_index();
+    }
+
+    /// Reset delay buffer
+    ///
+    pub fn reset_buffer(&mut self) {
+        self.buffer = vec![0.0; self.length];
+        self.read_index = 0;
+        self.write_index = 0;
+    }
+
+    fn advance_read_index(&mut self) {
+        self.read_index += 1;
+        self.read_index %= self.length;
+    }
+
+    fn advance_write_index(&mut self) {
+        self.write_index += 1;
+        self.write_index %= self.length;
     }
 
 }
@@ -347,10 +505,7 @@ pub enum DelayBufferError
 #[derive(Debug)]
 pub struct DelayBuffer
 {
-    pub delay_length: usize,
-    pub(crate) dbuffer: Vec<f32>,
-    pub(crate) read_index: usize,
-    pub(crate) write_index: usize,
+    pub(crate) dbuffer: DataBuffer,
     pub(crate) tap_cache: Vec<usize>,
 }
 
@@ -366,10 +521,7 @@ impl DelayBuffer
     /// 
     pub fn new(delay_length: usize) -> Self {
         Self {
-            delay_length,
-            dbuffer: vec![0.0; delay_length],
-            read_index: 0,
-            write_index: 0,
+            dbuffer: DataBuffer::new(delay_length),
             tap_cache: Vec::new()
         }
     }
@@ -437,8 +589,8 @@ impl DelayBuffer
     /// `Result<(), DelayBufferError>`
     /// 
     pub fn internal_tap(&mut self, length: usize) -> Result<(), DelayBufferError> {
-        if length > self.delay_length { return Err(DelayBufferError::TapLengthMustBeLessThanBufferLength) }
-        let tap_index = self.delay_length - length;
+        if length > self.dbuffer.length { return Err(DelayBufferError::TapLengthMustBeLessThanBufferLength) }
+        let tap_index = self.dbuffer.length - length;
         if !self.tap_cache.contains(&tap_index) { self.tap_cache.push(tap_index) }
         Ok(())
     }
@@ -471,17 +623,15 @@ impl DelayBuffer
     /// `Result<(), DelayBufferError>`
     /// 
     pub fn external_tap(&mut self, length: usize) -> Result<f32, DelayBufferError> {
-        if length > self.delay_length { return Err(DelayBufferError::TapLengthMustBeLessThanBufferLength) }
-        let index = (self.delay_length - length) + self.read_index;
-        Ok(self.dbuffer[index % self.delay_length])
+        if length > self.dbuffer.length { return Err(DelayBufferError::TapLengthMustBeLessThanBufferLength) }
+        let index = (self.dbuffer.length - length) + self.dbuffer.read_index;
+        Ok(self.dbuffer.buffer[index % self.dbuffer.length])
     }
 
     /// Read delay buffer
     /// 
     pub fn read_buffer(&mut self) -> f32 {
-        let sample = self.dbuffer[self.read_index];
-        self.advance_read_index();
-        sample
+        self.dbuffer.read_buffer()
     }
 
     /// Write delay buffer
@@ -492,36 +642,62 @@ impl DelayBuffer
     /// `sample`: sample in
     /// 
     pub fn write_buffer(&mut self, sample: f32) {
-        self.dbuffer[self.write_index] = sample;
-        self.advance_write_index();
+        self.dbuffer.write_buffer(sample);
     }
 
     /// Reset delay buffer
     ///
     pub fn reset_buffer(&mut self) {
-        self.dbuffer = vec![0.0; self.delay_length];
-        self.read_index = 0;
-        self.write_index = 0;
+        self.dbuffer.reset_buffer();
     }
     
     fn read_internal_tap(&self) -> f32 {
         let mut tap_sum = 0.0;
         if !self.tap_cache.is_empty() {
             for tap in self.tap_cache.iter() {
-                tap_sum += self.dbuffer[(tap + self.read_index) % self.delay_length];
+                tap_sum += self.dbuffer.buffer[(tap + self.dbuffer.read_index) % self.dbuffer.length];
             }
         }
         tap_sum
     }
 
-    fn advance_read_index(&mut self) {
-        self.read_index += 1;
-        self.read_index %= self.delay_length;
+}
+
+// DATA BUS MUST BE DEBUGGED
+#[derive(Debug)]
+pub struct DataBus
+{
+    pub bus_data: Arc<RwLock<f32>>
+}
+
+impl Default for DataBus
+{
+    fn default() -> Self {
+        Self { bus_data: Arc::new(RwLock::new(0.0)) }
+    }
+}
+
+impl DataBus
+{
+    pub fn new() -> Self {
+        Self::default()
     }
 
-    fn advance_write_index(&mut self) {
-        self.write_index += 1;
-        self.write_index %= self.delay_length;
+    pub fn bus_child(&mut self) -> Arc<RwLock<f32>> {
+        Arc::clone(&self.bus_data)
     }
 
+    pub fn read_bus(&mut self) -> f32 {
+        *self.bus_data.read().unwrap()
+    }
+    
+    pub fn write_bus(&mut self, sample: f32) {
+        let mut value = self.bus_data.write().unwrap();
+        *value += sample
+    }
+    
+    pub fn clear_bus(&mut self) {
+        let mut value = self.bus_data.write().unwrap();
+        *value = 0.0    
+    }
 }

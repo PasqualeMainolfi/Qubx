@@ -4,6 +4,16 @@ Qubx is a Rust library for managing and processing audio streams in parallel.
 Related paper: P. Mainolfi, Qubx: a Rust Library for Queue-Based Multithreaded
 Real-Time Parallel Audio Streams Processing and Managment, Dafx24, Surrey UK, 2024.  
 
+>**Version 0.5.0**
+
+- Bug fixes
+- New! Add `qgenesis` mod featuring most relevant synthesis techniques. It currently supports fm-am-pm and granulation synthesis.
+- New! Add `qanalysis`mod. This big module enables analysis in time, frequency and querency domain. In time domain it includes amplitude envelope, zero crossing rate and energy analysis; in frequency domain, fft-ifft, stft-istft and mfcc in querency domain (see doc.)
+- New! Add `qwindows` mod. This module enables for generation of window function, currently supporting Rectangular, Hamming, Hanning and Blackman mode
+- New! Add `qfilters` mod. This module enable for genarating filters: `Biquad`, `Butter`, `Narrow`, `OnePole`, `TwoZeroTwoPole`, `Harmonic`, `Dc` and `Zavalishin`
+- Add macros for working with complex number and coordinate: `scale_in_the_range`, `next_power_of_two_length`, `meltof`, `ftomel`
+- Add inline function: `ctor`, `rtoc`, `ctomag`, `ctoangle` and `comp_conj` (for complex values)
+
 >**Version 0.3.0**
 
 - Bug fixes

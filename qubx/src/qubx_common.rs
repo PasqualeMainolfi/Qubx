@@ -2,6 +2,7 @@
 
 use std::thread::JoinHandle;
 use std::default::Default;
+
 use crate::{ qinterp::Interp, qsignals::{ SignalMode, SignalObject }, qtable::TableParams };
 
 
@@ -113,6 +114,7 @@ pub enum ProcessArg<T>
     PatchSpace(T),
 }
 
+#[derive(Debug)]
 pub enum ChannelError
 {
     VectorIsEmpty,
@@ -142,4 +144,29 @@ pub enum ToFileError
 pub trait WriteToFile<'a>
 {
     fn to_file(&self, name: &'a str) -> Result<(), ToFileError>;
+}
+
+pub trait FreqDomainToFloat
+{
+    type FftType;
+    fn get_mag(&self) -> Self::FftType;
+    fn get_angle(&self) -> Self::FftType;
+    fn get_db(&self) -> Self::FftType;
+}
+
+pub trait FreqDomainToComplex
+{
+    type FftType;
+    fn get_conj(&self) -> Self::FftType;
+}
+
+pub trait TimeDomainFloat
+{
+    fn get_vector(&self) -> &Vec<f32>;
+    fn get_n_channels(&self) -> usize;
+}
+
+pub trait FilteredSample<T>
+{
+    fn filtered_sample(&mut self, sample: f32) -> T;
 }

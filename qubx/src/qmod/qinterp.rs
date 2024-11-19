@@ -14,10 +14,10 @@ pub struct PhaseInterpolationIndex
 impl PhaseInterpolationIndex
 {
     pub fn new(index: f32) -> Self {
-        let mut ip = index as i32;
-        ip = if ip < 0 { 0 } else { ip };
-        let frac_part = index.fract();
-        Self { int_part: ip as usize, frac_part }
+        let ip = if index < 0.0 { 0.0 } else { index };
+        let frac_part = ip.fract();
+        let int_part = ip as usize;
+        Self { int_part, frac_part }
     }
 }
 
@@ -56,13 +56,12 @@ impl Interp {
                 match self {
                     Interp::Linear => Ok((1.0 - mu) * buffer[0] + mu * buffer[1]),
                     Interp::Cosine => {
-                        let mu2 = (1.0 - (mu * std::f32::consts::PI)) / 2.0;
+                        let mu2 = (1.0 - (mu * std::f32::consts::PI).cos()) / 2.0;
                         Ok(buffer[0] * (1.0 - mu2) + mu2 * buffer[1])
                     },
                     _ => Ok(0.0)
                 }
             },
-            3 => Ok((1.0 - mu) * buffer[1] + mu * buffer[2]),
             4 => {
                 match self {
                     Interp::Cubic => {

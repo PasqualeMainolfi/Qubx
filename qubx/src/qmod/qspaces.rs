@@ -3,9 +3,11 @@
 use core::f64;
 use nalgebra::{ matrix, max, vector, ComplexField, DVector, Matrix2 };
 use geo::{ ConvexHull, Coord, LineString };
+use portaudio::Sample;
 use statistical::median;
-use crate::{ clamp_angle, degtorad, poltocar, scale_in_range };
 use super::qoperations::precision_float;
+use crate::{ clamp_angle, degtorad, poltocar, scale_in_range };
+
 
 static N_DECIMALS: i32 = 15;
 static REF_ANGLE_RAD: f64 = degtorad!(45.0);
@@ -30,7 +32,7 @@ where
 	fn get_coord(&self) -> Coord;
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CartesianPoint
 {
 	pub x: f64,
@@ -88,7 +90,7 @@ impl Default for CartesianPoint
 	}
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PolarPoint
 {
 	pub r: f64,
@@ -133,7 +135,7 @@ impl Default for PolarPoint
 pub enum SpaceMode
 {
 	Vbap,
-	Dbap,
+	Dbap(f64, Option<f64>, Option<PolarPoint>), // rolloff, blur, ref_point
 	StereoLinear,
 	StereoCostantPower,
 	StereoCompromise
@@ -167,6 +169,7 @@ pub struct SpaceObject
 	pub speakers_cartesian_loc: Vec<CartesianPoint>,
 	pub speaker_pairs: Option<Vec<SpeakerPair>>,
 	pub geo_center: Option<CartesianPoint>,
+	pub dbap_params: Option<(f64, Option<f64>, Option<PolarPoint>)>,
 	pub mode: SpaceMode
 }
 
@@ -206,6 +209,7 @@ impl SpaceObject
 
 		let mut spairs: Option<Vec<SpeakerPair>> = None;
 		let mut geometric_center: Option<CartesianPoint> = None;
+		let mut dbap_params: Option<(f64, Option<f64>, Option<PolarPoint>)> = None;
 
 		match mode {
 			SpaceMode::Vbap => {
@@ -267,7 +271,7 @@ impl SpaceObject
 				};
 				spairs = Some(speaker_pairs)
 			},
-			SpaceMode::Dbap => {
+			SpaceMode::Dbap(rolloff, blur, ref_point) => {
 				let mut geo_center = CartesianPoint { x: 0.0, y: 0.0 };
 				for coord in speakers_cartesian_loc.iter() {
 					geo_center.x += coord.x;
@@ -275,7 +279,8 @@ impl SpaceObject
 				}
 				geo_center.x /= n_points as f64;
 				geo_center.y /= n_points as f64;
-				geometric_center = Some(geo_center)
+				geometric_center = Some(geo_center);
+				dbap_params = Some((rolloff, blur, ref_point));
 			},
 			_ => { }
 		}
@@ -286,6 +291,7 @@ impl SpaceObject
 			speakers_cartesian_loc,
 			speaker_pairs: spairs,
 			geo_center: geometric_center,
+			dbap_params,
 			mode
 		})
 	}
@@ -335,7 +341,7 @@ impl<'a> QSpace<'a>
 				let s2 = source_angle_scaled * fac;
 				((s1 * fac * source_angle_scaled.cos()).sqrt(), (s2 * fac * source_angle_scaled.sin()).sqrt())
 			},
-			SpaceMode::Vbap | SpaceMode::Dbap => return Err(SpaceError::ModeNotAllowedInStereo),
+			SpaceMode::Vbap | SpaceMode::Dbap(_, _, _) => return Err(SpaceError::ModeNotAllowedInStereo),
 		};
 		Ok(vec![g.0 as f32, g.1 as f32])
 	}	
@@ -409,16 +415,25 @@ impl<'a> QSpace<'a>
 	/// -----
 	/// 
 	/// `source`: cartesian coordinate of source position (see `CartesianPoint`)  
-	/// `rolloff`: rolloff coefficient in dB  
-	/// `blur`: spatial blur  
 	/// 
 	/// # Return
 	/// -------
 	/// 
 	/// `Result<Vec<f32>, SpaceError>`
 	/// 
-	pub fn dbap(&mut self, source: &PolarPoint, rolloff: f64, blur: Option<f64>, ref_point: Option<&PolarPoint>) -> Result<Vec<f32>, SpaceError> {
-		if self.space_object.mode != SpaceMode::Dbap { return Err(SpaceError::ModeNotAllowedInDbap) }
+	pub fn dbap(&mut self, source: &PolarPoint) -> Result<Vec<f32>, SpaceError> {
+		let mut rolloff = 0.0;
+		let mut blur: Option<f64> = None;
+		let mut ref_point: Option<PolarPoint> = None;
+
+		if let Some(params) = self.space_object.dbap_params {
+			rolloff = params.0;
+			blur = params.1;
+			ref_point = params.2;
+		} else {
+			return Err(SpaceError::ModeNotAllowedInDbap)
+		}
+
 		let source_car = poltocar!(source);
 		let a = rolloff / (20.0 * (2.0).log10());
 		if let Some(reference) = ref_point { 
@@ -482,6 +497,41 @@ impl<'a> QSpace<'a>
 		};
 
 		Ok(v)
+	}
+
+	/// Apply spacer
+	/// 
+	/// # Args
+	/// -----
+	/// 
+	/// `target`: audio source  
+	/// `source_position`: virtual source position
+	/// 
+	/// 
+	/// # Return 
+	/// -------
+	/// 
+	/// `Result<Vec<f32>, SpaceError>`  
+	/// Note: return each sample individually. The length of each sample (or chunk) equals the number of loudspeakers  
+	/// 
+	pub fn spacer(&mut self, sample: f32, source_position: &PolarPoint) -> Result<Vec<f32>, SpaceError> { 
+		let mut chunk: Vec<f32> = Vec::with_capacity(self.space_object.n_loudspeakers);
+
+		let gains: Vec<f32> = match self.space_object.mode {
+			SpaceMode::StereoLinear | SpaceMode::StereoCostantPower | SpaceMode::StereoCompromise => {
+				if self.space_object.n_loudspeakers > 2 { return Err(SpaceError::SpeakersMustBeTwoInStereoMode) }
+				self.stereo_pan(&source_position.theta).unwrap()
+			},
+			SpaceMode::Vbap => self.vbap(source_position).unwrap(),
+			SpaceMode::Dbap(_, _, _ ) => self.dbap(source_position).unwrap()
+		};
+		
+		for (i, value) in chunk.iter_mut().enumerate() { 
+			*value = sample * gains[i];
+		}
+
+		Ok(chunk)
+	
 	}
 
 }

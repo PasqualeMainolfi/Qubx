@@ -5,6 +5,7 @@ mod convolution_example;
 mod sigenv_example;
 mod buffers_example;
 mod spaces_example;
+mod genesis_example;
 
 
 fn main() {
@@ -13,5 +14,7 @@ fn main() {
     // convolution_example::convolution_example();
     // sigenv_example::sigenv_example();
     // buffers_example::buffers_example();
-    spaces_example::spaces_example();
+    // spaces_example::spaces_example();
+    genesis_example::genesis_example();
+
 }

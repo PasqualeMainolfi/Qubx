@@ -1,15 +1,12 @@
 #![allow(unused)]
 
 use core::fmt;
-use std::time::Duration;
+use std::{borrow::BorrowMut, time::Duration};
 use std::collections::HashMap;
 use std::fmt::Display;
 use crate::qubx_common::{ Channels, ChannelError };
 use super::{ 
-	qinterp::{ Interp, PhaseInterpolationIndex }, 
-	qoperations::split_into_nchannels, 
-	qtable::{ TableArg, TableError, TableMode, TableParams }, 
-	shared_tools::{ interp_buffer_write, update_and_reset_increment, update_increment }
+	qbuffers::ReadBufferDirection, qinterp::{ Interp, PhaseInterpolationIndex }, qoperations::split_into_nchannels, qtable::{ TableArg, TableError, TableMode, TableParams }, shared_tools::{ interp_buffer_write_from_table, update_and_reset_increment, update_increment }
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -19,7 +16,8 @@ pub enum EnvelopeError
 	EnvExponetialZeroValue,
 	EnvLengthExceeded,
 	EnvToSignalErrorDifferentChannelNumbers,
-	TableNotAllowed
+	TableNotAllowed,
+	EnvModeNotAllowed
 }
 
 impl fmt::Display for EnvelopeError {
@@ -30,6 +28,7 @@ impl fmt::Display for EnvelopeError {
 			Self::EnvLengthExceeded => write!(f, "<EnvLengthExceeded>"),
 			Self::EnvToSignalErrorDifferentChannelNumbers => write!(f, "<EnvToSignalErrorDifferentChannelNumbers>"),
 			Self::TableNotAllowed => write!(f, "<TableNotAllowed>"),
+			Self::EnvModeNotAllowed => write!(f, "<EnvModeNotAllowed>")
 		}
 	}
 }
@@ -37,6 +36,7 @@ impl fmt::Display for EnvelopeError {
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum EnvMode
 {
+	NoMode,
 	Linear,
 	Exponential
 }
@@ -46,7 +46,8 @@ impl fmt::Display for EnvMode
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			Self::Linear => write!(f, "Linear"),
-			Self::Exponential => write!(f, "Exponential")
+			Self::Exponential => write!(f, "Exponential"),
+			Self::NoMode => write!(f, "NoMode"),
 		}
 	}
 }
@@ -100,8 +101,8 @@ pub struct EnvParams
 {
 	pub shape: Vec<f32>,
 	pub mode: EnvMode,
-	phase_motion: f32,
-	interp_buffer: Vec<f32>
+	pub(crate) phase_motion: f32,
+	pub(crate) interp_buffer: Vec<f32>
 }
 
 impl EnvParams
@@ -111,15 +112,15 @@ impl EnvParams
 	}
 
 	fn update_and_set_pmotion(&mut self, value: f32, table_length: f32) {
-        update_and_reset_increment(&mut self.phase_motion, value, table_length);
+        update_and_reset_increment(&mut self.phase_motion, value, table_length, ReadBufferDirection::Forward);
     }
     
     fn update_pmotion(&mut self, value: f32) {
         update_increment(&mut self.phase_motion, value);
     }
 
-    fn write_interp_buffer(&mut self, interp: Interp, sample: f32) {
-        interp_buffer_write(&mut self.interp_buffer, interp, sample);
+    fn write_interp_buffer_from_table(&mut self, interp: Interp, table: &[f32], index: usize) {
+        interp_buffer_write_from_table(&mut self.interp_buffer, interp, table, index);
     }
 }
 
@@ -330,7 +331,8 @@ impl QEnvelope
 							e.current_exponential_components.1 = (p2 / p1).powf(1.0 / (seg_length - 1) as f32);
 							e.current_exponential_components.0 = p1 / e.current_exponential_components.1;
 							e.current_value = p1;
-						}
+						},
+						EnvMode::NoMode => return Err(EnvelopeError::EnvModeNotAllowed)
 					}
 					e.current_index += 1;
 				}
@@ -347,7 +349,8 @@ impl QEnvelope
 								let b = e.current_exponential_components.1;
 								let x = e.current_index as i32 + 1;
 								e.current_value = a * b.powi(x);
-							}
+							},
+							EnvMode::NoMode => return Err(EnvelopeError::EnvModeNotAllowed)
 						}
 					}
 					e.current_index += 1;
@@ -368,20 +371,66 @@ impl QEnvelope
 		}
 	}
 
-	pub fn advance_envelope_from_table(&self, envelope_table: &mut TableParams, interp: Interp, duration: f32) -> Result<f32, EnvelopeError> {
+	pub(crate) fn advance_envelope_from_table_private(&self, env_params: &mut EnvParams, envelope_table: &mut TableParams, interp: Interp, duration: f32) -> Result<f32, EnvelopeError> {
 		match envelope_table.mode {
-			TableMode::Envelope(ref mut params) => {
+			TableMode::Envelope(_) | TableMode::EnvelopeData(_) => {
 				let f = 1.0 / duration;
 				let si = f * envelope_table.table_length / self.sr;
-				let table_index = PhaseInterpolationIndex::new(params.phase_motion);
+				let table_index = PhaseInterpolationIndex::new(env_params.phase_motion);
 				let index_int = table_index.int_part;
 				let frac_part = table_index.frac_part;
-				params.write_interp_buffer(interp, envelope_table.table[index_int]);
-				let sample = interp.get_table_interpolation(frac_part, &params.interp_buffer).unwrap();
-				params.update_and_set_pmotion(si, envelope_table.table_length);
+				env_params.write_interp_buffer_from_table(interp, &envelope_table.table, index_int);
+				let sample = interp.get_table_interpolation(frac_part, &env_params.interp_buffer).unwrap();
+				env_params.update_and_set_pmotion(si, envelope_table.table_length);
 				Ok(sample)
 			},
-			TableMode::Signal(_) => Err(EnvelopeError::TableNotAllowed)
+			TableMode::Signal(_) | TableMode::Data(_) => Err(EnvelopeError::TableNotAllowed)
+		}
+	}
+
+	/// Advance envelope from table
+	/// 
+	/// Note: This method must be debugged!  
+	/// 
+	/// # Args  
+	/// -----
+	/// 
+	/// `envelope_table`: envelope table as `TableParams`  
+	/// `interp`: interpolation mode  
+	/// `duration`: envelope duration in sec  
+	/// 
+	/// # Return 
+	/// -------
+	/// 
+	/// `Result<f32, EnvelopeError>`  
+	/// 
+	pub fn advance_envelope_from_table(&self, envelope_table: &mut TableParams, interp: Interp, duration: f32) -> Result<f32, EnvelopeError> {
+		let f = 1.0 / duration;
+		let si = f * envelope_table.table_length / self.sr;
+		match envelope_table.mode {
+			TableMode::Envelope(ref mut env_params) => {
+				let table_index = PhaseInterpolationIndex::new(env_params.phase_motion);
+				let index_int = table_index.int_part;
+				let frac_part = table_index.frac_part;
+				env_params.write_interp_buffer_from_table(interp, &envelope_table.table, index_int);
+				let sample = interp.get_table_interpolation(frac_part, &env_params.interp_buffer).unwrap();
+				env_params.update_and_set_pmotion(si, envelope_table.table_length);
+				Ok(sample)
+			},
+			TableMode::EnvelopeData(_) => {
+				if let Some(env_params) = envelope_table.env_params.borrow_mut() {
+					let table_index = PhaseInterpolationIndex::new(env_params.phase_motion);
+					let index_int = table_index.int_part;
+					let frac_part = table_index.frac_part;
+					env_params.write_interp_buffer_from_table(interp, &envelope_table.table, index_int);
+					let sample = interp.get_table_interpolation(frac_part, &env_params.interp_buffer).unwrap();
+					env_params.update_and_set_pmotion(si, envelope_table.table_length);
+					Ok(sample)
+				} else {
+					Err(EnvelopeError::TableNotAllowed)
+				}
+			}
+			TableMode::Signal(_) | TableMode::Data(_) => Err(EnvelopeError::TableNotAllowed)
 		}
 	}
 }

@@ -1,10 +1,10 @@
-use qubx::{ 
-    Qubx, 
-    StreamParameters, 
-    ProcessArg, 
-    DspProcessArg, 
+use qubx::{
+    Qubx,
+    StreamParameters,
+    ProcessArg,
+    DspProcessArg,
     DspHybridType,
-    DspPatchType, 
+    DspPatchType,
     MasterPatchType,
     qinterp::Interp,
     qoperations::envelope_to_signal,
@@ -30,13 +30,13 @@ pub fn sigenv_example() {
         outchannels: CHANNELS,
         ..StreamParameters::default()
     };
-    
+
     let mut q = Qubx::new(false);
     q.start_monitoring_active_processes();
-    
+
     let mut master_out = q.create_master_streamout(String::from("M1"), stream_params);
     let master_clos: MasterPatchType = Box::new(|frame| {
-        frame.iter_mut().for_each(|sample| { *sample *= 0.7 }) 
+        frame.iter_mut().for_each(|sample| { *sample *= 0.7 })
     });
     master_out.start(ProcessArg::PatchSpace(master_clos));
 
@@ -45,12 +45,12 @@ pub fn sigenv_example() {
     let duration = 1.1;
 
 	let mut exp_env = QEnvelope::new(SR as f32);
-    
+
     let mut sine_params = SignalParams::new(SignalMode::Sine, 440.0, 0.7, 0.0, SR as f32);
     let mut sine_table = QTable::new();
-    let _ = sine_table.write_table("sine", TableMode::Signal(SignalMode::Sine), SR as usize);
-    let signal_sine = QSignal::into_signal_object(&mut sine_params, duration, TableArg::WithTable((sine_table.get_table("sine"), Interp::Cubic))).unwrap();
-    
+    let _ = sine_table.write_table("sine".to_string(), TableMode::Signal(SignalMode::Sine), SR as usize);
+    let signal_sine = QSignal::into_signal_object(&mut sine_params, duration, TableArg::WithTable((sine_table.get_table("sine".to_string()), Interp::Cubic))).unwrap();
+
     let mut comp_params = ComplexSignalParams::new([440.0, 567.0, 768.0].to_vec(), [0.7, 0.5, 0.3].to_vec(), None, SR as f32);
     let signal_comp = QSignal::into_signal_object(&mut comp_params, duration, TableArg::NoTable).unwrap();
 
@@ -65,7 +65,7 @@ pub fn sigenv_example() {
     let enveloped_comp_signal = envelope_to_signal(&signal_comp, &env_shape).unwrap();
     dsp_process.start(DspProcessArg::Source::<DspPatchType, DspHybridType>(enveloped_comp_signal.vector_signal));
     std::thread::sleep(std::time::Duration::from_secs_f32(1.5));
-    
+
     // let buffer = AudioBuffer::new(SR);
     let buffer_audio = Arc::new(Mutex::new(AudioBuffer::new(SR)));
     let buffer_clone = Arc::clone(&buffer_audio);
@@ -73,7 +73,7 @@ pub fn sigenv_example() {
     let audio = buffer_clone.lock().unwrap().to_audio_object(path).unwrap();
     dsp_process.start(DspProcessArg::Source::<DspPatchType, DspHybridType>(audio.vector_signal.clone()));
     std::thread::sleep(std::time::Duration::from_secs_f32(1.0));
-    
+
     dsp_process.start(DspProcessArg::PatchSpace::<DspPatchType, DspHybridType>(Box::new(move || {
         let path: &str = "/Users/pm/AcaHub/AudioSamples/cane.wav";
         let mut audio = buffer_clone.lock().unwrap().to_audio_object(path).unwrap();
@@ -110,7 +110,7 @@ pub fn sigenv_example() {
             if timer >= (duration * SR as f32) { break }
             timer += 1.0;
         }
-        
+
         audio.set_read_again(true);
         timer = 0.0;
         loop {
