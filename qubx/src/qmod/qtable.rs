@@ -1,10 +1,10 @@
 use std::collections::HashMap;
-use super::{ 
-    qenvelopes::{ EnvMode, EnvParams, QEnvelope }, 
-    qinterp::Interp, 
-    qoperations::split_into_nchannels, 
-    qsignals::SignalMode, 
-    shared_tools::get_phase_motion 
+use super::{
+    qenvelopes::{ EnvMode, EnvParams, QEnvelope },
+    qinterp::Interp,
+    qoperations::split_into_nchannels,
+    qsignals::SignalMode,
+    shared_tools::get_phase_motion
 };
 
 
@@ -24,19 +24,19 @@ pub enum TableError
 }
 
 /// Table Mode
-/// 
-/// `Signal(SignalMode)`: for signal table lookup  
-/// `Envelope(EnvParams)`: for envelope table. In this case times in envelope shape must be in samples  
-/// `EnvelopeData(&'a [f32])`: create table from vec  
-/// `Data((&'a [f32], usize))`: create table from audio data from vector  
-/// 
+///
+/// `Signal(SignalMode)`: for signal table lookup
+/// `Envelope(EnvParams)`: for envelope table. In this case times in envelope shape must be in samples
+/// `EnvelopeData(&'a [f32])`: create table from vec
+/// `Data((&'a [f32], usize))`: create table from audio data from vector
+///
 #[derive(Debug, Clone)]
 pub enum TableMode
 {
     Signal(SignalMode),       // SignalMode
     Envelope(EnvParams),      // EnvParams
     EnvelopeData(Vec<f32>),  // envelope from data vector
-    Data((Vec<f32>, usize))  // data vector, number of channels  
+    Data((Vec<f32>, usize))  // data vector, number of channels
 }
 
 #[derive(Debug, Clone)]
@@ -66,20 +66,20 @@ impl QTable
     pub fn new() -> Self {
         Self { table_cache: HashMap::new() }
     }
-    /// Build table 
-    /// 
+    /// Build table
+    ///
     /// # Args
     /// -----
-    /// `table_id`: table id  
+    /// `table_id`: table id
     /// `mode`: table mode (see `TableMode`). In TableMode::Envelope(...) envelope times in shape must be in samples
-    /// `table_length`: table length  
-    /// 
-    /// 
+    /// `table_length`: table length
+    ///
+    ///
     /// # Return
-    /// 
+    ///
     /// `Result<(), TableError>`
-    /// 
-    /// 
+    ///
+    ///
     pub fn write_table(&mut self, table_id: String, mode: TableMode, table_length: usize) -> Result<(), TableError> {
         match mode {
             TableMode::Signal(sig_mode) => {
@@ -125,6 +125,10 @@ impl QTable
 
     pub fn get_table(&mut self, table_id: String) -> &mut TableParams {
         self.table_cache.get_mut(table_id.as_str()).unwrap()
+    }
+
+    pub fn get_table_length(&mut self, table_id: String) -> f32 {
+    	self.table_cache.get(table_id.as_str()).unwrap().table_length
     }
 
     pub fn read_table(&self, table_id: String, i: usize) -> f32 {

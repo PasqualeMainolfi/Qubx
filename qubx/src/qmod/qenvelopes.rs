@@ -5,7 +5,7 @@ use std::{borrow::BorrowMut, time::Duration};
 use std::collections::HashMap;
 use std::fmt::Display;
 use crate::qubx_common::{ Channels, ChannelError };
-use super::{ 
+use super::{
 	qbuffers::ReadBufferDirection, qinterp::{ Interp, PhaseInterpolationIndex }, qoperations::split_into_nchannels, qtable::{ TableArg, TableError, TableMode, TableParams }, shared_tools::{ interp_buffer_write_from_table, update_and_reset_increment, update_increment }
 };
 
@@ -114,7 +114,7 @@ impl EnvParams
 	fn update_and_set_pmotion(&mut self, value: f32, table_length: f32) {
         update_and_reset_increment(&mut self.phase_motion, value, table_length, ReadBufferDirection::Forward);
     }
-    
+
     fn update_pmotion(&mut self, value: f32) {
         update_increment(&mut self.phase_motion, value);
     }
@@ -125,14 +125,14 @@ impl EnvParams
 }
 
 /// Adsr Parameters
-/// 
-/// `attack_dur`: duration of attack in sec  
-/// `decay_dur`: duration of decay in sec  
-/// `sustain_dur`: duration of sustain in sec  
-/// `sustain_level`: level of sustain [0, 1]  
-/// `release_dur`: duration of release in sec  
-/// `mode`: envelope mode (see `EnvMode`)  
-/// 
+///
+/// `attack_dur`: duration of attack in sec
+/// `decay_dur`: duration of decay in sec
+/// `sustain_dur`: duration of sustain in sec
+/// `sustain_level`: level of sustain [0, 1]
+/// `release_dur`: duration of release in sec
+/// `mode`: envelope mode (see `EnvMode`)
+///
 #[derive(Debug, Clone, Copy)]
 pub struct AdsrParams
 {
@@ -191,7 +191,6 @@ impl QEnvelope
 	}
 
 	fn get_envelope_key(&self, env_params: &EnvParams) -> String {
-
 		let mut key: String = env_params.shape
 			.iter()
 			.map(|v| v.to_string())
@@ -208,15 +207,15 @@ impl QEnvelope
 	///
 	/// `env_params`: `EnvParams` struct in which you can specify:
 	/// envelope shape encoded as a, t0, b, t1, c, tn, ...
-	/// from a to b in t0 seconds and from b to c in t1 sec, and so on, and 
-	/// envelope mode, linear or exponential (see `EnvMode`)  
-	/// 
+	/// from a to b in t0 seconds and from b to c in t1 sec, and so on, and
+	/// envelope mode, linear or exponential (see `EnvMode`)
+	///
 	/// # Return
 	/// --------
-	/// 
+	///
 	/// `EnvelopeObject`
-	/// 
-	/// 
+	///
+	///
 	pub fn into_envelope_object(&mut self, env_params: &EnvParams) -> EnvelopeObject {
 		let mut env = Vec::new();
 		loop {
@@ -238,36 +237,36 @@ impl QEnvelope
 
 	/// Generate ADSR shape to vec
 	/// The envelope generates is in the range [0.0, 1.0]
-	/// 
+	///
 	/// # Args
 	/// ------
-	/// 
+	///
 	/// `adsr_params`: ADSR params (see `AdsrParams`). Sustain level must be in range [0, 1]
-	/// 
+	///
 	/// # Return
 	/// --------
-	/// 
+	///
 	/// `EnvelopeObject`
-	/// 
-	pub fn adsr_to_envelope_object(&mut self, adsr_params: &AdsrParams) -> EnvelopeObject { 
+	///
+	pub fn adsr_to_envelope_object(&mut self, adsr_params: &AdsrParams) -> EnvelopeObject {
 		let env_params = adsr_params.get_env_params();
 		self.into_envelope_object(&env_params)
 	}
 
 	/// Generate ADSR sample by sample
 	/// The envelope generates is in the range [0, 1]
-	/// 
+	///
 	/// # Args
 	/// ------
-	/// 
-	/// `adsr_params`: ADSR params (see `AdsrParams`). Sustain level must be in the range [0, 1]  
-	/// `length exceeded`: if `true` return `Err(EnvelopeError::EnvLengthExceeded)`  
-	/// at the end of envelope. If `false`, at the end of envelope it remain  
+	///
+	/// `adsr_params`: ADSR params (see `AdsrParams`). Sustain level must be in the range [0, 1]
+	/// `length exceeded`: if `true` return `Err(EnvelopeError::EnvLengthExceeded)`
+	/// at the end of envelope. If `false`, at the end of envelope it remain
 	/// on the last value
-	/// 
+	///
 	/// # Return
 	/// --------
-	/// 
+	///
 	/// `Result<f32, EnvelopeError>`
 	///
 	pub fn advance_adsr(&mut self, adsr_params: &AdsrParams, length_exceeded: bool) -> Result<f32, EnvelopeError> {
@@ -282,18 +281,18 @@ impl QEnvelope
 	///
 	/// `env_params`: `EnvParams` struct in which you can specify:
 	/// envelope shape encoded as a, t0, b, t1, c, tn, ...
-	/// from a to b in t0 seconds and from b to c in t1 sec, and so on, and 
-	/// envelope mode, linear or exponential (see `EnvMode`)  
-	/// `length exceeded`: if `true` return `Err(EnvelopeError::EnvLengthExceeded)`  
-	/// at the end of envelope. If `false`, at the end of envelope it remain  
+	/// from a to b in t0 seconds and from b to c in t1 sec, and so on, and
+	/// envelope mode, linear or exponential (see `EnvMode`)
+	/// `length exceeded`: if `true` return `Err(EnvelopeError::EnvLengthExceeded)`
+	/// at the end of envelope. If `false`, at the end of envelope it remain
 	/// on the last value
-	/// 
+	///
 	/// # Return
 	/// --------
-	/// 
+	///
 	/// `Result<f32, EnvelopeError>`
-	/// 
-	/// 
+	///
+	///
 	pub fn advance_envelope(&mut self, env_params: &EnvParams, length_exceeded: bool) -> Result<f32, EnvelopeError>{
 		let key: String = self.get_envelope_key(env_params);
 		let (values, times) = self.get_times_and_values(&env_params.shape);
@@ -304,14 +303,14 @@ impl QEnvelope
 		if *env_mode == EnvMode::Exponential && (values[0] == 0.0 || values[values.len() - 1] == 0.0) {
 			return Err(EnvelopeError::EnvExponetialZeroValue)
 		}
-		
-		if !self.cache_rt.contains_key(&key) { 
-			self.cache_rt.insert(key.to_string(), EnvRT::new()); 
+
+		if !self.cache_rt.contains_key(&key) {
+			self.cache_rt.insert(key.to_string(), EnvRT::new());
 			let e = self.cache_rt.get_mut(&key).unwrap();
 			e.values = values;
 			e.times = times;
 		}
-		
+
 		let e = self.cache_rt.get_mut(&key).unwrap();
 		if e.current_segment < e.times.len() {
 			e.current_segment_length = (e.times[e.current_segment] * self.sr).ceil() as usize;
@@ -325,7 +324,7 @@ impl QEnvelope
 					match env_mode {
 						EnvMode::Linear => {
 							e.current_linear_step = (p2 - p1) / seg_length as f32;
-							e.current_value = p1;	
+							e.current_value = p1;
 						},
 						EnvMode::Exponential => {
 							e.current_exponential_components.1 = (p2 / p1).powf(1.0 / (seg_length - 1) as f32);
@@ -364,9 +363,9 @@ impl QEnvelope
 
 			// println!("[INFO] value: {}, segment: {}, index: {}", e.current_value, e.current_segment, e.current_index);
 
-			Ok(e.current_value)					
+			Ok(e.current_value)
 		} else {
-			if !length_exceeded { return Ok(e.current_value) } 
+			if !length_exceeded { return Ok(e.current_value) }
 			Err(EnvelopeError::EnvLengthExceeded)
 		}
 	}
@@ -389,21 +388,21 @@ impl QEnvelope
 	}
 
 	/// Advance envelope from table
-	/// 
-	/// Note: This method must be debugged!  
-	/// 
-	/// # Args  
+	///
+	/// Note: This method must be debugged!
+	///
+	/// # Args
 	/// -----
-	/// 
-	/// `envelope_table`: envelope table as `TableParams`  
-	/// `interp`: interpolation mode  
-	/// `duration`: envelope duration in sec  
-	/// 
-	/// # Return 
+	///
+	/// `envelope_table`: envelope table as `TableParams`
+	/// `interp`: interpolation mode
+	/// `duration`: envelope duration in sec
+	///
+	/// # Return
 	/// -------
-	/// 
-	/// `Result<f32, EnvelopeError>`  
-	/// 
+	///
+	/// `Result<f32, EnvelopeError>`
+	///
 	pub fn advance_envelope_from_table(&self, envelope_table: &mut TableParams, interp: Interp, duration: f32) -> Result<f32, EnvelopeError> {
 		let f = 1.0 / duration;
 		let si = f * envelope_table.table_length / self.sr;
